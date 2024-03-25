@@ -750,6 +750,11 @@ ri02 <- RunUMAP(ri02, dims = 1:ndim, min.dist = 0.5, n.neighbors = 20)
 ri02$seurat_clusters <- as.factor(as.numeric(ri02$seurat_clusters))
 Idents(ri02) <- ri02$seurat_clusters
 
+# DimHeatmap for Ri02 ----
+
+DoHeatmap(ri02, features = VariableFeatures(ri02))
+
+
 # Fig 6a UMAP ----
 
 pdf("figures/fig6a_Ri02_colour_default.pdf", width = 8)
@@ -898,3 +903,32 @@ p <- ggplot(x, aes(x = cluster, y = value, fill = cluster)) +
 print(p)
 dev.off()
 
+# ---------------------------------------------------------------
+
+# Heatmaps of marker genes distinguishing clusters ---------
+
+seurat_by_smp <- list("Ri01" = ri01,
+                      "Ri02" = ri02,
+                      "Ri01_dis" = Ri01_dis,
+                      "Ri01_5m" = Ri01_rem)
+
+for (smp in names(seurat_by_smp)){
+    print(smp)
+    smp_markers <- FindAllMarkers(seurat_by_smp[[smp]]) %>% 
+        group_by(cluster) %>%
+        dplyr::filter(avg_log2FC > 1) %>%
+        slice_head(n = 10) %>%
+        ungroup() 
+    
+    png(sprintf("figures/seurat_cluster_marker_heatmap_%s.png",
+                smp),
+        width = 12, height = 10, units = "in", res = 500)
+    
+    p <- DoHeatmap(seurat_by_smp[[smp]], features = smp_markers$gene) 
+        NoLegend() +
+        theme(axis.text.y = element_text(size = 6))
+    print(p)
+    dev.off()
+}
+
+# ---------------------------------------------------------------
