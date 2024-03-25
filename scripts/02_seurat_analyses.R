@@ -20,16 +20,14 @@ p_cutoff <- 0.05
 tcr_col <- "beta_aa"
 
 data_dir <- "data"
-ncores <- 8
+
+# Read data ----
 
 combined_tcr <- read_rds(file.path(data_dir, "processed/combined_tcr.rds"))
-combined_tcr <- combined_tcr[startsWith(names(combined_tcr), "Ri")]
-# Read data ----
 
 exp_dirs <- list.files(file.path(data_dir, "raw/GEX"), full.names = TRUE)
 exp_dirs <- file.path(exp_dirs, "filtered_feature_bc_matrix")
 names(exp_dirs) <- basename(dirname(exp_dirs))
-exp_dirs <- exp_dirs[startsWith(names(exp_dirs), "Ri")]
 
 seurat_data <-  Read10X(exp_dirs)
 
@@ -66,7 +64,6 @@ seurat_obj[["percent.mt"]] <- PercentageFeatureSet(seurat_obj,
 
 rm(seurat_data, features, alias2sym, exp_dirs)
 
-
 # Add TCR information ----
 
 seurat_obj <- combineExpression(combined_tcr, seurat_obj)
@@ -85,13 +82,13 @@ seurat_obj@meta.data <- seurat_obj@meta.data %>%
 
 # QC plots for all three Ri samples ----
 
-pdf("figures/Perriot_Jones/qc/seurat_violin.pdf")
+pdf("figures/qc/seurat_violin.pdf")
 VlnPlot(seurat_obj,
         features = c("nFeature_RNA", "nCount_RNA", "percent.mt"),
         ncol = 3)
 dev.off()
 
-pdf("figures/Perriot_Jones/qc/seurat_feature_scatter.pdf", width = 9)
+pdf("figures/qc/seurat_feature_scatter.pdf", width = 9)
 plot1 <- FeatureScatter(seurat_obj,
                         feature1 = "nCount_RNA",
                         feature2 = "percent.mt")
@@ -103,7 +100,7 @@ dev.off()
 
 # Filter high gene count or high mitochondrial read percentage ----
 seurat_obj <- subset(seurat_obj,
-                     subset = nFeature_RNA < 6000 &
+                     subset = nFeature_RNA < 5000 &
                          percent.mt < 10)
 
 # Keep cells that have any CD8 count or a TCR ----
@@ -113,16 +110,10 @@ has_tcr <- ! is.na(seurat_obj@meta.data$CTgene)
 keep <- cd8_expressed | has_tcr
 seurat_obj <- subset(seurat_obj, cells = which(keep))
 
-#Ri01_5m Ri01_dis   Ri02 
-#16059    14152    11990 
-
-#Ri01_5m Ri01_dis   Ri02 
-#15038    13237    10667 
-
 # -------------------------------------------------------------------
-# Clustering of Ri01_dis and Ri01_dis
+# Clustering of Ri01_dis and Ri01_5m
 # -------------------------------------------------------------------
-# Patient 1 at disease (Ri01_dis) and remission (Ri01_dis) ----
+# Patient 1 at disease (Ri01_dis) and remission (Ri01_5m) ----
 
 Idents(seurat_obj) <- seurat_obj@meta.data$Sample
 ri01 <- subset(seurat_obj, idents = c("Ri01_dis", "Ri01_5m"))
@@ -139,11 +130,11 @@ ri01 <- RunPCA(ri01)
 
 # PCA QC figures ----
 
-pdf("figures/Perriot_Jones/qc/seurat_ri01_pca_elbow.pdf")
+pdf("figures/qc/seurat_ri01_pca_elbow.pdf")
 ElbowPlot(ri01)
 dev.off()
 
-pdf("figures/Perriot_Jones/qc/seurat_ri01_dimheatmap.pdf",
+pdf("figures/qc/seurat_ri01_dimheatmap.pdf",
     width = 10, height = 12)
 DimHeatmap(ri01, dims = 1:15, cells = 500, balanced = TRUE)
 dev.off()
@@ -169,8 +160,7 @@ write_rds(Idents(ri01),
 # Analyses for Figure 4 
 # -------------------------------------------------------------------
 # Plot UMAP for both Ri01 samples ----
-pdf("figures/Perriot_Jones/4a_supp_Ri01_dis_Ri01_5m_colour_default.pdf",
-    width = 8)
+pdf("figures/4a_supp_Ri01_dis_Ri01_5m_colour_default.pdf", width = 8)
 p <- DimPlot(ri01, reduction = "umap") +
     guides(colour = guide_legend(title = "Cluster",
                                  override.aes = list(size = 6))) +
@@ -178,8 +168,7 @@ p <- DimPlot(ri01, reduction = "umap") +
 p
 dev.off()
 
-pdf("figures/Perriot_Jones/4a_supp_Ri01_dis_Ri01_5m_colour_rainbow.pdf",
-    width = 8)
+pdf("figures/4a_supp_Ri01_dis_Ri01_5m_colour_rainbow.pdf", width = 8)
 p + khroma::scale_color_discreterainbow(reverse = TRUE)
 dev.off()
 
@@ -236,7 +225,7 @@ labs(title = "P1 (remission)",
      x = "UMAP dimension 1",
      y = "UMAP dimension 2")
 
-pdf("figures/Perriot_Jones/4a_supp_umap_left_Ri01_dis_right_Ri01_5m.pdf",
+pdf("figures/4a_supp_umap_left_Ri01_dis_right_Ri01_5m.pdf",
     width = 9.5, height = 5)
 p1_dis + p1_rem
 dev.off()
@@ -254,7 +243,7 @@ rm(Ri01_tmp)
 
 # Ri01_dis 
 
-pdf("figures/Perriot_Jones/4a_Ri01_dis_colour_default.pdf",
+pdf("figures/4a_Ri01_dis_colour_default.pdf",
     width = 8)
 p <- DimPlot(Ri01_dis, reduction = "umap") +
     guides(colour = guide_legend(title = "Cluster",
@@ -263,7 +252,7 @@ p <- DimPlot(Ri01_dis, reduction = "umap") +
 p
 dev.off()
 
-pdf("figures/Perriot_Jones/4a_Ri01_dis_colour_rainbow.pdf",
+pdf("figures/4a_Ri01_dis_colour_rainbow.pdf",
     width = 8)
 p + khroma::scale_color_discreterainbow(reverse = TRUE)
 dev.off()
@@ -271,7 +260,7 @@ dev.off()
 
 # Ri01_5m 
 
-pdf("figures/Perriot_Jones/4a_supp_Ri01_5m_colour_default.pdf",
+pdf("figures/4a_supp_Ri01_5m_colour_default.pdf",
     width = 8)
 p <- DimPlot(Ri01_rem, reduction = "umap") +
     guides(colour = guide_legend(title = "Cluster",
@@ -280,7 +269,7 @@ p <- DimPlot(Ri01_rem, reduction = "umap") +
 p
 dev.off()
 
-pdf("figures/Perriot_Jones/4a_supp_Ri01_5m_colour_rainbow.pdf",
+pdf("figures/4a_supp_Ri01_5m_colour_rainbow.pdf",
     width = 8)
 p + khroma::scale_color_discreterainbow(reverse = TRUE)
 dev.off()
@@ -292,7 +281,7 @@ fig2b_markers <- c("BCL2", "CCR7", "TCF7", "PRF1", "CXCR3",
                    "GZMB", "IL2RB", "CD27", "SELL")
 
 
-pdf("figures/Perriot_Jones/fig4b.pdf", width = 8)
+pdf("figures/fig4b.pdf", width = 8)
 FeaturePlot(Ri01_dis, features = fig2b_markers, keep.scale = "all",
             cols = c("lightgray", "gold", "firebrick")) +
     plot_layout(guides = "collect") &
@@ -318,7 +307,7 @@ av_expr <- t(av_expr)
 # rows (genes) scaled 
 
 # Heatmap, viridis palette ----
-pdf("figures/Perriot_Jones/fig4c_scaled_by_gene_viridis.pdf", width = 8.6)
+pdf("figures/fig4c_scaled_by_gene_viridis.pdf", width = 8.6)
 p <- pheatmap(av_expr,
          labels_col = gsub("g", "", colnames(av_expr)),
          cluster_cols = FALSE,
@@ -330,7 +319,7 @@ print(p)
 dev.off()
 
 # Heatmap, Seurat palette ----
-pdf("figures/Perriot_Jones/fig4c_scaled_by_gene_purple_yellow.pdf", width = 8.6)
+pdf("figures/fig4c_scaled_by_gene_purple_yellow.pdf", width = 8.6)
 p <- pheatmap(av_expr,
               labels_col = gsub("g", "", colnames(av_expr)),
               cluster_cols = FALSE,
@@ -370,7 +359,7 @@ full_umap <- DimPlot(Ri01_dis,
 xlims <- layer_scales(full_umap)$x$get_limits()
 ylims <- layer_scales(full_umap)$y$get_limits()
 
-pdf("figures/Perriot_Jones/fig4d.pdf", width = 8)
+pdf("figures/fig4d.pdf", width = 8)
 dim_plots <- lapply(names(Ri01_dis_by_cl), function(x){
     colour <- ifelse(x == "P1 C8", "#DC050C", "black")
     DimPlot(Ri01_dis_by_cl[[x]], cols = colour, pt.size = 0.25) +
@@ -396,7 +385,7 @@ rainbow_pal <- structure(rev(color("discrete rainbow")(n_clusters)),
 
 # Default colour version -----
 
-pdf("figures/Perriot_Jones/fig4d_colour_by_cluster.pdf", width = 8)
+pdf("figures/fig4d_colour_by_cluster.pdf", width = 8)
 dim_plots <- lapply(names(Ri01_dis_by_cl), function(x){
     DimPlot(Ri01_dis_by_cl[[x]], group.by = "seurat_clusters", pt.size = 0.25) +
         theme(#axis.line = element_blank(),
@@ -420,7 +409,7 @@ dev.off()
 
 # Rainbow colour version -----
 
-pdf("figures/Perriot_Jones/fig4d_colour_by_cluster_rainbow.pdf", width = 8)
+pdf("figures/fig4d_colour_by_cluster_rainbow.pdf", width = 8)
 dim_plots <- lapply(names(Ri01_dis_by_cl), function(x){
     DimPlot(Ri01_dis_by_cl[[x]], group.by = "seurat_clusters", pt.size = 0.25) +
         theme(#axis.line = element_blank(),
@@ -453,7 +442,7 @@ default_subs <- default_pal[as.character(unique(df$Cluster))]
 rainbow_subs <- rainbow_pal[as.character(unique(df$Cluster))]
 
 
-pdf("figures/Perriot_Jones/fig4e_default.pdf", width = 9)
+pdf("figures/fig4e_default.pdf", width = 9)
 ggplot(df, aes(x = clone, fill = Cluster)) +
     geom_bar(position = "fill", color = "black") +
     scale_y_continuous(expand = expansion(c(0,0))) +
@@ -466,7 +455,7 @@ ggplot(df, aes(x = clone, fill = Cluster)) +
 dev.off()
 
 
-pdf("figures/Perriot_Jones/fig4e_rainbow.pdf", width = 9)
+pdf("figures/fig4e_rainbow.pdf", width = 9)
 ggplot(df, aes(x = clone, fill = Cluster)) +
     geom_bar(position = "fill", color = "black") +
     scale_y_continuous(expand = expansion(c(0,0))) +
@@ -528,7 +517,7 @@ ri01_clones_expr <- FetchData(ri01_clones_agg, vars = keep_genes)
 ri01_clones_expr <- t(ri01_clones_expr)
 
 # Heatmap of markers distinguishing Ri01 clones, viridis palette ----
-pdf("figures/Perriot_Jones/fig5a_av_expr_scaled_by_row_viridis.pdf",
+pdf("figures/fig5a_av_expr_scaled_by_row_viridis.pdf",
     height = 9)
 p <- pheatmap(ri01_clones_expr,
          fontsize_row = 1,
@@ -538,7 +527,7 @@ print(p)
 dev.off()
 
 # Heatmap of markers distinguishing Ri01 clones, Seurat palette ----
-pdf("figures/Perriot_Jones/fig5a_av_expr_scaled_by_row_purple_yellow.pdf",
+pdf("figures/fig5a_av_expr_scaled_by_row_purple_yellow.pdf",
     height = 9)
 p <- pheatmap(ri01_clones_expr,
               fontsize_row = 1,
@@ -612,7 +601,7 @@ labs <- levels(Idents(ri01_clones_split[["Ri01_dis"]]))
 is_bold_dis <- structure(ifelse(labs == "P1 C8", "bold", "plain"),
                          names = labs)
 
-pdf("figures/Perriot_Jones/fig5b_Ri01_dis_genes_on_y.pdf", height = 5)
+pdf("figures/fig5b_Ri01_dis_genes_on_y.pdf", height = 5)
 p <- DotPlot(ri01_clones_split[["Ri01_dis"]], features = rev(dot_markers)) +
     coord_flip() + 
     scale_color_viridis_c() +
@@ -624,7 +613,7 @@ p <- DotPlot(ri01_clones_split[["Ri01_dis"]], features = rev(dot_markers)) +
 print(p)
 dev.off()
 
-pdf("figures/Perriot_Jones/fig5b_Ri01_dis_genes_on_x.pdf", height = 5)
+pdf("figures/fig5b_Ri01_dis_genes_on_x.pdf", height = 5)
 
 p <- DotPlot(ri01_clones_split[["Ri01_dis"]], features = rev(dot_markers)) +
     scale_color_viridis_c() +
@@ -641,7 +630,7 @@ labs <- levels(Idents(ri01_clones_split[["Ri01_5m"]]))
 is_bold <- structure(ifelse(labs == "P1 C8", "bold", "plain"),
                      names = labs)
 
-pdf("figures/Perriot_Jones/fig5d_Ri01_5m_genes_on_y.pdf", height = 5)
+pdf("figures/fig5d_Ri01_5m_genes_on_y.pdf", height = 5)
 p <- DotPlot(ri01_clones_split[["Ri01_5m"]], features = rev(dot_markers)) +
     coord_flip() + 
     scale_color_viridis_c() +
@@ -653,7 +642,7 @@ p <- DotPlot(ri01_clones_split[["Ri01_5m"]], features = rev(dot_markers)) +
 print(p)
 dev.off()
 
-pdf("figures/Perriot_Jones/fig5d_Ri01_5m_genes_on_x.pdf", height = 5)
+pdf("figures/fig5d_Ri01_5m_genes_on_x.pdf", height = 5)
 
 p <- DotPlot(ri01_clones_split[["Ri01_5m"]], features = rev(dot_markers)) +
     scale_color_viridis_c() +
@@ -677,7 +666,7 @@ x <- tibble::as_tibble(t(x)) %>%
     dplyr::mutate(name = factor(name, levels = fig_5c_markers))
 
 # Violins for selected markers, scaled by area ----
-pdf("figures/Perriot_Jones/fig5c_scale_by_area.pdf", height = 4.5, width = 8)    
+pdf("figures/fig5c_scale_by_area.pdf", height = 4.5, width = 8)    
 p <- ggplot(x, aes(x = cluster, y = value, fill = cluster)) +
     geom_violin(width = 1.5, scale = "area") + # This is ggplot default
     theme_bw() +
@@ -701,7 +690,7 @@ print(p)
 dev.off()
 
 # Violins for selected markers, scaled by width ----
-pdf("figures/Perriot_Jones/fig5c_scale_by_width.pdf", height = 4.5, width = 8)    
+pdf("figures/fig5c_scale_by_width.pdf", height = 4.5, width = 8)    
 p <- ggplot(x, aes(x = cluster, y = value, fill = cluster)) +
     geom_rect(xmin = 7.5,
               xmax = 8.5,
@@ -742,12 +731,54 @@ ri02 <- subset(seurat_obj, idents = c("Ri02"))
 # Reset Idents to clusters for Ri02
 Idents(ri02) <- ri02$orig.ident
 
-# Filter, normalize, scale, PCA ----
+# Filter, normalize, scale, PCA, UMAP ----
 
 ri02 <- NormalizeData(ri02)
 ri02 <- FindVariableFeatures(ri02)
 ri02 <- ScaleData(ri02) 
 ri02 <- RunPCA(ri02)
+
+ri02 <- FindNeighbors(ri02, dims = 1:ndim)
+ri02 <- FindClusters(ri02, resolution = 0.5) 
+# min.dist default 0.3, increasing preserves more global structure
+ri02 <- RunUMAP(ri02, dims = 1:ndim, min.dist = 0.5, n.neighbors = 20)
+
+# Change the cluster IDs to start from 1 
+
+ri02$seurat_clusters <- as.factor(as.numeric(ri02$seurat_clusters))
+Idents(ri02) <- ri02$seurat_clusters
+
+# Fig 6a UMAP ----
+
+# Plot UMAP for both Ri02  ----
+pdf("figures/6a_Ri02_colour_default.pdf", width = 8)
+p <- DimPlot(ri02, reduction = "umap") +
+    guides(colour = guide_legend(title = "Cluster",
+                                 override.aes = list(size = 6))) +
+    labs(x = "UMAP dimension 1", y = "UMAP dimension 2")
+p
+dev.off()
+
+pdf("figures/6a_Ri02_colour_rainbow.pdf", width = 8)
+p + khroma::scale_color_discreterainbow(reverse = TRUE)
+dev.off()
+
+# Fig 6b UMAP with selected markers ----
+
+fig6b_markers <- fig2b_markers 
+
+pdf("figures/fig6b.pdf", width = 8)
+FeaturePlot(ri02, features = fig6b_markers, keep.scale = "all",
+            cols = c("lightgray", "gold", "firebrick")) +
+    plot_layout(guides = "collect") &
+    theme(axis.line = element_blank(),
+          axis.title = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank()) &
+    labs(color = "log2 Exp")
+dev.off()
+
+
 
 # Get top 10 clones ----
 
@@ -759,12 +790,13 @@ ri02_top_10_clones <- ri02@meta.data %>%
     dplyr::ungroup() %>%
     dplyr::slice_head(n = 10) %>%
     dplyr::mutate(plot_label = sprintf("P2 C%s", 1:n()),
+                  # This is the same clone as the clone of interest for Ri01
                   is_bold = ifelse(plot_label == "P2 C5", "bold", "plain"), 
                   plot_label = factor(plot_label,
                                       levels = unique(plot_label))) 
 
 write_csv(ri02_top_10_clones,
-          "results/beta_aa/ri02_label_to_sequence.csv")
+          "results/ri02_label_to_sequence.csv")
 
 is_bold_ri02 <- structure(ri02_top_10_clones$is_bold,
                           names = as.character(ri02_top_10_clones$plot_label)) 
@@ -777,7 +809,7 @@ rownames(ri02@meta.data) <- Cells(ri02)
 ri02_clones <- subset(ri02, cells = which(!is.na(ri02$plot_label)))
 Idents(ri02_clones) <- ri02_clones$plot_label
 
-pdf("figures/Perriot_Jones/fig6b_Ri02_genes_on_y.pdf", height = 5)
+pdf("figures/fig6d_Ri02_genes_on_y.pdf", height = 5)
 p <- DotPlot(ri02_clones, features = rev(dot_markers)) +
     coord_flip() + 
     scale_color_viridis_c() +
@@ -789,7 +821,7 @@ p <- DotPlot(ri02_clones, features = rev(dot_markers)) +
 print(p)
 dev.off()
 
-pdf("figures/Perriot_Jones/fig6d_Ri02_genes_on_x.pdf", height = 5)
+pdf("figures/fig6d_Ri02_genes_on_x.pdf", height = 5)
 
 p <- DotPlot(ri02_clones, features = rev(dot_markers)) +
     scale_color_viridis_c() +
@@ -799,8 +831,6 @@ p <- DotPlot(ri02_clones, features = rev(dot_markers)) +
     labs(x = NULL, y = NULL)
 print(p)
 dev.off()
-
-
 
 
 
@@ -822,7 +852,7 @@ x <- tibble::as_tibble(t(x)) %>%
 
 
 
-pdf("figures/Perriot_Jones/fig6c_scale_by_width.pdf", height = 4.5)    
+pdf("figures/fig6c_scale_by_width.pdf", height = 4.5)    
 p <- ggplot(x, aes(x = cluster, y = value, fill = cluster)) +
     geom_violin(alpha = 0.5, scale = "width") +
     geom_boxplot(width = 0.1, outlier.shape = NA, show.legend = FALSE) +
@@ -842,7 +872,7 @@ p <- ggplot(x, aes(x = cluster, y = value, fill = cluster)) +
 print(p)
 dev.off()
 
-pdf("figures/Perriot_Jones/fig6c_scale_by_area.pdf", height = 4.5)    
+pdf("figures/fig6c_scale_by_area.pdf", height = 4.5)    
 p <- ggplot(x, aes(x = cluster, y = value, fill = cluster)) +
     geom_violin(alpha = 0.5, width = 1.4, scale = "area") +
     geom_boxplot(width = 0.1, outlier.shape = NA, show.legend = FALSE) +

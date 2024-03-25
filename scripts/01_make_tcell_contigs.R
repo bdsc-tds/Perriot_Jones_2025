@@ -28,7 +28,7 @@ ri_nms <- names(combined_tcr)[ri_samples]
     
 # Relative proportions of top Ri clones ----
 
-pdf("figures/ri_top_10_clone_ppns.pdf", width = 10)
+pdf("figures/scRepertoire/ri_top_10_clone_ppns.pdf", width = 10)
 p <- clonalCompare(combined_tcr, 
               top.clones = 10, 
               samples = ri_nms, 
@@ -43,7 +43,7 @@ dev.off()
 
 
 # Scatter of proportions in Ri samples ----
-pdf(sprintf("figures/clone_ppns_%s_%s.pdf", ri_nms[1], ri_nms[2]), width = 10)
+pdf(sprintf("figures/scRepertoire/clone_ppns_%s_%s.pdf", ri_nms[1], ri_nms[2]), width = 10)
 p <- clonalScatter(combined_tcr, 
               cloneCall = "strict", 
               x.axis = ri_nms[1],
@@ -59,7 +59,7 @@ dev.off()
 
 # Clonal homeostasis ----
 
-pdf("figures/clonal_homeostasis.pdf", width = 9)
+pdf("figures/scRepertoire/clonal_homeostasis.pdf", width = 9)
 p <- 
 clonalHomeostasis(combined_tcr) +
     theme(axis.text = element_text(size = 14),
@@ -71,7 +71,7 @@ clonalHomeostasis(combined_tcr) +
 print(p)
 dev.off()
 
-pdf("figures/clonal_rank_ppn.pdf", width = 9)
+pdf("figures/scRepertoire/clonal_rank_ppn.pdf", width = 9)
 p <- 
 clonalProportion(combined_tcr, cloneCall = "strict") +
     theme(axis.text = element_text(size = 14),
@@ -85,7 +85,7 @@ dev.off()
 
 # TCR gene usage ----
 
-pdf("figures/tcr_gene_usage.pdf", width = 8)
+pdf("figures/scRepertoire/tcr_gene_usage.pdf", width = 8)
 p <- 
 vizGenes(combined_tcr, plot = "barplot") +
     theme(axis.text.x = element_text(size = 10))
@@ -95,18 +95,3 @@ dev.off()
 # Write out combined clonotypes ----
 readr::write_rds(combined_tcr, file = "data/processed/combined_tcr.rds")
 
-# Experimental ----
-#clonalQuant(combined_tcr,#[ri_samples], 
-#            cloneCall="strict", 
-#            scale = TRUE)
-
-#clonalAbundance(combined_tcr[ri_samples], 
-#                cloneCall = "strict", 
-#                scale = FALSE)
-
-#clonalLength(combined_tcr[ri_samples], 
-#             cloneCall="aa", 
-#             chain = "both") 
-
-#vizGenes(combined_tcr) +
-#    theme(axis.text.y = element_text(size = 16)) 
