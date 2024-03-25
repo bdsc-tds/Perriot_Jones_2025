@@ -1,0 +1,13 @@
+library("tidyverse")
+library("scRepertoire")
+library("Seurat")
+library("SeuratDisk")
+library("patchwork")
+library("khroma")
+library("org.Hs.eg.db")
+library("pheatmap")
+library("viridis")
+
+sink("log/library_versions.txt")
+sessionInfo()
+sink()
