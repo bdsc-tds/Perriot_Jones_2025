@@ -196,7 +196,7 @@ ri01_top_10_clones <- ri01@meta.data %>%
     dplyr::select(-temp)
 
 write_csv(ri01_top_10_clones,
-          "results/beta_aa/ri01_label_to_sequence.csv")
+          "results/ri01_label_to_sequence.csv")
 
 ri01@meta.data <- ri01@meta.data %>%
     dplyr::left_join(ri01_top_10_clones %>% 
@@ -332,6 +332,8 @@ dev.off()
 
 # Fig 4d ----
 
+ri01_top10_nms <- sprintf("P1 C%s", 1:10) 
+
 ri01_dis_top_10 <- ri01_top_10_clones %>%
     dplyr::filter(Sample == "Ri01_dis") %>%
     dplyr::pull(plot_label)
@@ -342,7 +344,6 @@ ri01_dis_clones <- subset(Ri01_dis,
 Idents(ri01_dis_clones) <- ri01_dis_clones$Sample
        
 Ri01_dis_by_cl <- SplitObject(ri01_dis_clones, split.by = "plot_label")
-Ri01_dis_by_cl <- Ri01_dis_by_cl[levels(droplevels(Ri01_dis$plot_label))]
 
 full_umap <- DimPlot(Ri01_dis,
                      cols = "lightgray",
@@ -474,7 +475,8 @@ dev.off()
 # Diff expr between top 10 clones for Ri01_dis and Ri01_rem combined----
 
 ri01_clones <- subset(ri01,
-                      cells = Cells(ri01)[! is.na(ri01$plot_label)])
+                      cells = Cells(ri01)[ri01$plot_label %in% ri01_top10_nms])
+
 # Set Idents to clonotypes 
 Idents(ri01_clones) <- ri01_clones$plot_label
 
@@ -750,8 +752,7 @@ Idents(ri02) <- ri02$seurat_clusters
 
 # Fig 6a UMAP ----
 
-# Plot UMAP for both Ri02  ----
-pdf("figures/6a_Ri02_colour_default.pdf", width = 8)
+pdf("figures/fig6a_Ri02_colour_default.pdf", width = 8)
 p <- DimPlot(ri02, reduction = "umap") +
     guides(colour = guide_legend(title = "Cluster",
                                  override.aes = list(size = 6))) +
@@ -759,7 +760,7 @@ p <- DimPlot(ri02, reduction = "umap") +
 p
 dev.off()
 
-pdf("figures/6a_Ri02_colour_rainbow.pdf", width = 8)
+pdf("figures/fig6a_Ri02_colour_rainbow.pdf", width = 8)
 p + khroma::scale_color_discreterainbow(reverse = TRUE)
 dev.off()
 
@@ -806,6 +807,8 @@ ri02@meta.data <- ri02@meta.data %>%
                          dplyr::select(Sample, beta_aa, plot_label))
 rownames(ri02@meta.data) <- Cells(ri02)
 
+# Fig 6d ----
+
 ri02_clones <- subset(ri02, cells = which(!is.na(ri02$plot_label)))
 Idents(ri02_clones) <- ri02_clones$plot_label
 
@@ -832,67 +835,66 @@ p <- DotPlot(ri02_clones, features = rev(dot_markers)) +
 print(p)
 dev.off()
 
+# Fig 6c ----
 
-
-# Fig 6d ----
-
-Ri02_clones <- top_10_clone_by_sample[["Ri02"]]
-
-Ri02_10_clones <- subset(Ri02,
-                         cells = which(Ri02$beta_aa %in% Ri02_clones))
-Idents(Ri02_10_clones) <- Ri02_10_clones$beta_aa
-
-
-x <- GetAssayData(Ri02_10_clones)[fig_5c_markers, ]
+x <- GetAssayData(ri02_clones)[fig_5c_markers, ]
 x <- tibble::as_tibble(t(x)) %>%
-    dplyr::bind_cols(cluster = Idents(Ri02_10_clones))%>%
-    tidyr::pivot_longer(-cluster) %>%
-    dplyr::mutate(name = factor(name, levels = fig_3c_markers))
+    dplyr::bind_cols(cluster = Idents(ri02_clones))%>%
+    tidyr::pivot_longer(-cluster)# %>%
+    #dplyr::mutate(name = factor(name, levels = fig_3c_markers))
 
 
-
-
-pdf("figures/fig6c_scale_by_width.pdf", height = 4.5)    
+# Violins for selected markers, scaled by area ----
+pdf("figures/fig6c_scale_by_area.pdf", height = 4.5, width = 8)    
 p <- ggplot(x, aes(x = cluster, y = value, fill = cluster)) +
-    geom_violin(alpha = 0.5, scale = "width") +
-    geom_boxplot(width = 0.1, outlier.shape = NA, show.legend = FALSE) +
+    geom_violin(scale = "area") + # This is ggplot default
     theme_bw() +
     facet_wrap(~name, scales = "free_y", ncol = 2) +
     theme_minimal() +
-    theme(axis.text.x = element_text(angle = 90,
+    theme(axis.text.y = element_text(size = 10), 
+          axis.text.x = element_text(angle = 90,
                                      hjust = 1,
                                      vjust = 0.5,
-                                     size = 3),
-          legend.text = element_text(size = 4),
-          legend.position = c(0.75, -0.2),
-          legend.key.size = unit(0.5, "line"),
-          panel.grid = element_blank()) +
-    guides(fill = guide_legend(ncol = 2)) +
-    labs(x = NULL, y = NULL)
+                                     size = 10,
+                                     face = is_bold_ri02),
+          legend.text = element_text(size = 10),
+          legend.position = c(0.75, 0.0),
+          legend.key.size = unit(0.75, "line"),
+          panel.grid = element_blank(),
+          strip.text = element_text(face = "bold", size = 12),
+          axis.line = element_line()) +
+    guides(fill = guide_legend(ncol = 5)) +
+    labs(x = NULL, y = NULL, fill = NULL)
 print(p)
 dev.off()
 
-pdf("figures/fig6c_scale_by_area.pdf", height = 4.5)    
+# Violins for selected markers, scaled by width ----
+pdf("figures/fig6c_scale_by_width.pdf", height = 4.5, width = 8)    
 p <- ggplot(x, aes(x = cluster, y = value, fill = cluster)) +
-    geom_violin(alpha = 0.5, width = 1.4, scale = "area") +
-    geom_boxplot(width = 0.1, outlier.shape = NA, show.legend = FALSE) +
+    geom_rect(xmin = 4.5,
+              xmax = 5.5,
+              ymin = -Inf,
+              ymax = Inf,
+              fill = "lightgray",
+              alpha = 0.25) +
+    geom_violin(scale = "width") +
     theme_bw() +
     facet_wrap(~name, scales = "free_y", ncol = 2) +
     theme_minimal() +
-    theme(axis.text.x = element_text(angle = 90,
+    theme(axis.text.y = element_text(size = 10), 
+          axis.text.x = element_text(angle = 90,
                                      hjust = 1,
                                      vjust = 0.5,
-                                     size = 3),
-          legend.text = element_text(size = 4),
-          legend.position = c(0.75, -0.2),
-          legend.key.size = unit(0.5, "line"),
-          panel.grid = element_blank()) +
-    guides(fill = guide_legend(ncol = 2)) +
-    labs(x = NULL, y = NULL)
+                                     size = 10,
+                                     face = is_bold_ri02),
+          legend.text = element_text(size = 10),
+          legend.position = c(0.75, 0.0),
+          legend.key.size = unit(0.75, "line"),
+          panel.grid = element_blank(),
+          strip.text = element_text(face = "bold", size = 12),
+          axis.line = element_line()) +
+    guides(fill = guide_legend(ncol = 5)) +
+    labs(x = NULL, y = NULL, fill = NULL)
 print(p)
 dev.off()
 
-
-# TO DO FIX - PROBLEM WITH MATCHING ON SAMPLE AND CLONE WHEN JOINING
-
-# clones are identical except I have some P1 C10s missing in loupe
