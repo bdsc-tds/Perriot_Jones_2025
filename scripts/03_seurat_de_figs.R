@@ -904,6 +904,56 @@ print(p)
 dev.off()
 
 # ---------------------------------------------------------------
+# Barplot of Ri02 ----
+
+df <- tibble(clone = ri02_clones$plot_label,
+             Cluster = droplevels(ri02_clones$seurat_clusters)) %>%
+    dplyr::mutate(clone = 
+                      factor(clone,
+                             levels = rev(levels(ri02_clones$plot_label))))
+
+
+df %>% group_by(Cluster) %>%
+    mutate(n_cluster = n()) %>%
+    group_by(clone, Cluster, n_cluster) %>%
+    summarise(n = n()) %>%
+    group_by(Cluster) %>%
+    mutate(pct = n/n_cluster *100) %>%
+    write_csv("ri02_clusters.csv")
+
+
+default_subs <- default_pal[as.character(unique(df$Cluster))]
+rainbow_subs <- rainbow_pal[as.character(unique(df$Cluster))]
+
+
+pdf("figures/Ri02_clone_barplot.pdf", width = 9)
+ggplot(df, aes(x = clone, fill = Cluster)) +
+    geom_bar(position = "fill", color = "black") +
+    scale_y_continuous(expand = expansion(c(0,0))) +
+    scale_x_discrete(expand = expansion(c(0,0))) +
+    coord_flip() + 
+    scale_fill_manual(values = default_subs[levels(df$Cluster)],
+                      labels = names(default_subs[levels(df$Cluster)])) +
+    theme_bw() + 
+    labs(x = NULL, y = "Proportion of cells")
+dev.off()
+
+
+pdf("figures/Ri02_clone_barplot_rainbow.pdf", width = 9)
+ggplot(df, aes(x = clone, fill = Cluster)) +
+    geom_bar(position = "fill", color = "black") +
+    scale_y_continuous(expand = expansion(c(0,0))) +
+    scale_x_discrete(expand = expansion(c(0,0))) +
+    coord_flip() + 
+    scale_fill_manual(values = rainbow_subs[levels(df$Cluster)],
+                      labels = names(rainbow_subs[levels(df$Cluster)])) +
+    theme_bw() + 
+    labs(x = NULL, y = "Proportion of cells")
+dev.off()
+
+
+
+
 
 # Heatmaps of marker genes distinguishing clusters ---------
 
