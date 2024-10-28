@@ -5,6 +5,7 @@ library("rhdf5")
 library("Seurat")
 library("SeuratDisk")
 library("tidyverse")
+library("harmony")
 
 set.seed(7620)
 
@@ -18,6 +19,9 @@ project_dir <- tryCatch({Sys.getenv()[["project_dir"]]},
 scratch_dir <- tryCatch({Sys.getenv()[["scratch_dir"]]},
                         error = function(cond){return(".")})
 data_dir <- file.path(project_dir, "data")
+fig_dir <- file.path(project_dir, "figures")
+
+samples <- readLines(file.path(data_dir, "cellbender_input.txt"))
 
 # Functions ----
 
@@ -80,7 +84,7 @@ seurat_objs <- lapply(names(exp_dirs), function(nm){
 # Merge and normalize
 seurat_obj <- merge(seurat_objs[[1]], seurat_objs[2:length(seurat_objs)])
 seurat_obj[["RNA"]] <- JoinLayers(seurat_obj[["RNA"]])
-seurat_obj <- NormalizeData(seurat_obj)
+seurat_obj <- NormalizeData(seurat_obj) # normalise for total count per cell
 
 # Split and find variable features
 seurat_obj[["RNA"]] <- split(seurat_obj[["RNA"]],
@@ -94,18 +98,74 @@ seurat_obj <- SketchData(object = seurat_obj,
                      sketched.assay = "sketch")
 DefaultAssay(seurat_obj) <- "sketch"
 
-# PCA on sketched data
+# Find variable features and run PCA on sketched data
 seurat_obj <- FindVariableFeatures(seurat_obj)
 seurat_obj <- ScaleData(seurat_obj)
 seurat_obj <- RunPCA(seurat_obj)
 
-# Integrated with RPCA
-#seurat_obj <- IntegrateLayers(seurat_obj,
-#                          method = RPCAIntegration,
-#                          orig = "pca",
-#                          new.reduction = "integrated.rpca",
-#                          dims = 1:30,
-#                          k.anchor = 20)
+# Integrated with RPCA ----
+seurat_rpca <- IntegrateLayers(seurat_obj,
+                          method = RPCAIntegration,
+                          orig = "pca",
+                          new.reduction = "integrated.rpca",
+                          dims = 1:30,
+                          k.anchor = 20)
+
+seurat_rpca <- FindNeighbors(seurat_rpca,
+                            reduction = "integrated.rpca",
+                            dims = 1:30)
+seurat_rpca <- FindClusters(seurat_rpca)
+seurat_rpca <- RunUMAP(seurat_rpca,
+                      reduction = "integrated.rpca",
+                      dims = 1:30)
+
+pdf(file.path(fig_dir, "umap_sketch_rpca.pdf"))
+DimPlot(seurat_rpca,
+        group.by = "Sample",
+        reduction = "umap")
+dev.off()
+
+seurat_rpca[["sketch"]] <- JoinLayers(seurat_rpca[["sketch"]])
+
+# At this point, only the 50000 sketched cells have cluster annotation 
+# Project the other cells into the integrated space 
+
+seurat_rpca[["sketch"]] <- split(seurat_rpca[["sketch"]],
+                                f = seurat_rpca$Sample)
+
+# This adds the dimension reduction integrated.rpca.full 
+seurat_rpca <- ProjectIntegration(object = seurat_rpca,
+                                 sketched.assay = "sketch",
+                                 assay = "RNA",
+                                 reduction = "integrated.rpca")
+
+seurat_rpca <- ProjectData(object = seurat_rpca, 
+                          sketched.assay = "sketch",
+                          assay = "RNA",
+                          sketched.reduction = "integrated.rpca",
+                          full.reduction = "integrated.rpca.full",
+                          #umap.model = "umap", to use the sketched umap?
+                          dims = 1:30)
+
+#DefaultAssay(obj) <- "RNA"? 
+# Vignette https://satijalab.org/seurat/articles/seurat5_sketch_analysis
+# extends UMAP, other vignette reruns it
+
+
+# Run UMAP on the full projected data 
+seurat_rpca <- RunUMAP(seurat_rpca,
+                  reduction = "integrated.rpca.full",
+                  dims = 1:30,
+                  reduction.name = "umap.full",
+                  reduction.key = "UMAPfull_")
+
+
+pdf(file.path(fig_dir, "umap_sketch_rpca_full.pdf"))
+DimPlot(seurat_rpca,
+        reduction = "umap.full", 
+        group.by = "Sample")
+dev.off()
+
 
 # Integrate with Harmony ----
 seurat_obj <- IntegrateLayers(seurat_obj,
@@ -124,7 +184,7 @@ seurat_obj <- RunUMAP(seurat_obj,
 
 seurat_obj[["sketch"]] <- JoinLayers(seurat_obj[["sketch"]])
 
-pdf("umap_sketch_harmony.pdf")
+pdf(file.path(fig_dir, "umap_sketch_harmony.pdf"))
 DimPlot(seurat_obj, group.by = "Sample", reduction = "umap")
 dev.off()
 
@@ -152,3 +212,15 @@ seurat_obj <- ProjectData(object = seurat_obj,
 
 write_rds(seurat_obj, file = "integrated_sketch.rds")
 
+pdf(file.path(fig_dir, "umap_sketch_harmony_full.pdf"))
+DimPlot(seurat_obj, group.by = "Sample", reduction = "umap")
+dev.off()
+
+
+
+pdf(file.path(fig_dir, "umap_sketch_harmony_full_split.pdf"))
+DimPlot(seurat_obj,
+        group.by = "seurat.clusters",
+        reduction = "umap",
+        split.by = "Sample")
+dev.off()
