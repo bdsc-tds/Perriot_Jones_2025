@@ -5,6 +5,20 @@ vdj_dir <- "data/raw/VDJ"
 contig_annots <- list.files(vdj_dir, recursive = TRUE, full.names = TRUE)
 names(contig_annots) <- basename(dirname(contig_annots))
 
+samples <- read_delim("data/cellbender_input.txt", col_names = FALSE)[[1]]
+contig_annots <- contig_annots[samples]
+
+# Reformat to tab separated   
+#    gsub("\\s+", ";",
+#                readLines("data/cellbender_input.txt")) %>%
+#    as_tibble() %>%
+#    dplyr::filter(nchar(value) >= 1) %>%
+#    tidyr::separate(value,
+#                    into = c("sample", "cells", "droplets"),
+#                    sep = ";",
+#                    extra = "drop") %>%
+#    write_delim("data/cellbender_input.txt", delim = "\t")
+   
 contig_list <- lapply(contig_annots, read_csv)
 
 # Save the beta-chain cdr3
