@@ -140,9 +140,10 @@ seurat_obj <- filter_CD8(seurat_obj)
 table(seurat_obj$Sample)
 sink()
 
-# Split and find variable features ---
+# Split and find variable features ----
 seurat_obj[["RNA"]] <- split(seurat_obj[["RNA"]],
                              f = seurat_obj$Sample)
+# Splitting means that variable features are found for each sample
 seurat_obj <- FindVariableFeatures(seurat_obj)
 
 # Sketch data ----
@@ -173,6 +174,7 @@ seurat_rpca <- RunUMAP(seurat_rpca,
                       reduction = "integrated.rpca",
                       dims = 1:30)
 
+# UMAP on sketched data ----
 # UMAP on the integrated, sketched cells
 pdf(file.path(fig_dir, "umap_sketch_rpca.pdf"))
 DimPlot(seurat_rpca,
@@ -180,13 +182,19 @@ DimPlot(seurat_rpca,
         reduction = "umap")
 dev.off()
 
-#seurat_rpca[["sketch"]] <- JoinLayers(seurat_rpca[["sketch"]])
+pdf(file.path(fig_dir, "umap_sketch_rpca_cluster_by_sample.pdf"),
+    height = 12, width = 9)
+DimPlot(seurat_rpca,
+        group.by = "seurat_clusters",
+        split.by = "Sample",
+        reduction = "umap",
+        ncol = 3)
+dev.off()
 
+
+# Project to full data ----
 # At this point, only the 5000 sketched cells have cluster annotation 
 # Project the other cells into the integrated space 
-
-#seurat_rpca[["sketch"]] <- split(seurat_rpca[["sketch"]],
-#                                f = seurat_rpca$Sample)
 
 # This adds the dimension reduction integrated.rpca.full 
 seurat_rpca <- ProjectIntegration(object = seurat_rpca,
@@ -203,13 +211,12 @@ seurat_rpca <- ProjectData(object = seurat_rpca,
                           #umap.model = "umap", to use the sketched umap?
                           dims = 1:30)
 
-#DefaultAssay(obj) <- "RNA"? 
 # Vignette https://satijalab.org/seurat/articles/seurat5_sketch_analysis
 # extends UMAP, other vignette reruns it
 
 seurat_rpca[["sketch"]] <- JoinLayers(seurat_rpca[["sketch"]])
 
-# Run UMAP on the full projected data 
+# Run UMAP on the full projected data ---- 
 seurat_rpca <- RunUMAP(seurat_rpca,
                   reduction = "integrated.rpca.full",
                   dims = 1:30,
@@ -221,6 +228,16 @@ pdf(file.path(fig_dir, "umap_sketch_rpca_full_scratch.pdf"))
 DimPlot(seurat_rpca,
         reduction = "umap.full", 
         group.by = "Sample")
+dev.off()
+
+
+pdf(file.path(fig_dir, "umap_sketch_rpca_full_cluster_by_sample.pdf"),
+    height = 12, width = 9)
+DimPlot(seurat_rpca,
+        group.by = "seurat_clusters",
+        split.by = "Sample",
+        reduction = "umap.full",
+        ncol = 3)
 dev.off()
 
 # FeaturePlot with CD8A and CD8B 
@@ -237,15 +254,16 @@ write_rds(seurat_rpca,
           "integrated_sketch_rpca.rds")
 
 
-n_sample_cluster <- seurat_rpca[[]] %>%
-    dplyr::select(Sample, seurat_clusters) %>%
-    dplyr::group_by(Sample, seurat_clusters) %>%
-    dplyr::summarise(n_sample_cluster = n()) %>%
-    dplyr::group_by(Sample) %>%
-    dplyr::mutate(n_sample = sum(n_sample_cluster),
-                  pct_cluster = n_sample_cluster/n_sample * 100,
-                  seurat_clusters = as.factor(seurat_clusters)) %>%
-    dplyr::arrange(desc(pct_cluster))
+# Plot cluster by sample
+#n_sample_cluster <- seurat_rpca[[]] %>%
+#    dplyr::select(Sample, seurat_clusters) %>%
+#    dplyr::group_by(Sample, seurat_clusters) %>%
+#    dplyr::summarise(n_sample_cluster = n()) %>%
+#    dplyr::group_by(Sample) %>%
+#    dplyr::mutate(n_sample = sum(n_sample_cluster),
+#                  pct_cluster = n_sample_cluster/n_sample * 100,
+#                  seurat_clusters = as.factor(seurat_clusters)) %>%
+#    dplyr::arrange(desc(pct_cluster))
 
 
 pdf("bar_cluster_sample.pdf")
