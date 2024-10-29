@@ -16,7 +16,6 @@ min_features <- 100 # require at least 100 genes expressed
 max_percent_mt <- 10 # keep if not more than 10% mitochondrial reads 
 n_sketch <- 5000 # Number of cells for sketch
 
-
 # Check for directory environment variables 
 project_dir <- tryCatch({Sys.getenv()[["project_dir"]]},
                         error = function(cond){return(".")})
@@ -235,14 +234,60 @@ dev.off()
 
 # Save integrated data ----
 write_rds(seurat_rpca,
-          "data/processed/integrated_sketch_rpca.rds")
+          "integrated_sketch_rpca.rds")
 
 
-seurat_rpca[[]] %>%
+n_sample_cluster <- seurat_rpca[[]] %>%
     dplyr::select(Sample, seurat_clusters) %>%
     dplyr::group_by(Sample, seurat_clusters) %>%
     dplyr::summarise(n_sample_cluster = n()) %>%
     dplyr::group_by(Sample) %>%
     dplyr::mutate(n_sample = sum(n_sample_cluster),
-                  pct_cluster = n_sample_cluster/n_sample * 100) %>%
+                  pct_cluster = n_sample_cluster/n_sample * 100,
+                  seurat_clusters = as.factor(seurat_clusters)) %>%
     dplyr::arrange(desc(pct_cluster))
+
+
+pdf("bar_cluster_sample.pdf")
+ggplot(seurat_rpca[[]], aes(x = seurat_clusters, fill = Sample)) +
+    geom_bar(position = "fill", color = "black") +
+    scale_y_continuous(expand = expansion(c(0,0))) +
+    scale_x_discrete(expand = expansion(c(0,0))) +
+    coord_flip() + 
+    theme_bw() + 
+    labs(x = NULL, y = "Proportion of cells")
+dev.off()
+
+
+features <- VariableFeatures(seurat_rpca)
+features <- features[! grepl("^TR[AB]", features)][1:50]
+pdf("cluster_feature_heatmap.pdf", width = 12, height = 10)
+DoHeatmap(seurat_rpca,
+          features = features)
+dev.off()
+
+
+pseudo_rpca <- AggregateExpression(seurat_rpca,
+                                   assays = "RNA",
+                                   return.seurat = TRUE,
+                                   group.by = c("Sample", "seurat_clusters"))
+
+Idents(pseudo_rpca) <- "seurat_clusters"
+
+bulk_cluster_markers <- FindAllMarkers(object = pseudo_rpca,
+                                       min.pct = 0)
+
+features <- bulk_cluster_markers %>%
+    dplyr::filter(! grepl("^TR[AB]", gene)) %>%
+    dplyr::group_by(cluster) %>%
+    dplyr::slice_head(n = 5) %>%
+    pull(gene)
+
+
+var_features <- VariableFeatures(seurat_rpca)
+var_features <- var_features[! grepl("^TR[AB]", var_features)][1:50]
+pdf("cluster_feature_heatmap_pseudobulk.pdf", width = 12, height = 10)
+DoHeatmap(pseudo_rpca,
+          features = features)
+dev.off()
+
