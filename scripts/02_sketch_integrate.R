@@ -13,6 +13,7 @@ set.seed(7620)
 # Filtering and integration parameters
 min_cells <- 10 # keep features expressed in at least 10 cells
 min_features <- 100 # require at least 100 genes expressed
+max_features <- 6000 # require at most 6000 genes expressed
 max_percent_mt <- 10 # keep if not more than 10% mitochondrial reads 
 n_sketch <- 5000 # Number of cells for sketch
 
@@ -70,7 +71,6 @@ filter_CD8 <- function(seurat_obj){
     seurat_obj <- subset(seurat_obj, cells = which(keep))
 }
 
-
 # Read TCR data ----
 
 combined_tcr <- read_rds(file.path(data_dir, "processed/combined_tcr.rds"))
@@ -117,7 +117,7 @@ seurat_obj <- merge(seurat_objs[[1]], seurat_objs[2:length(seurat_objs)])
 seurat_obj[["RNA"]] <- JoinLayers(seurat_obj[["RNA"]])
 seurat_obj <- NormalizeData(seurat_obj) # normalise for total count per cell
 
-# Add TCR information 
+# Add TCR information ----
 seurat_obj <- combineExpression(combined_tcr, seurat_obj)
 
 # Add beta chain cdr3
@@ -131,12 +131,20 @@ seurat_obj@meta.data <- seurat_obj@meta.data %>%
     dplyr::mutate(across(matches("TCR|CTaa"), ~na_if(.x, "NA")),
                   beta_aa = paste(TCR2, CTaa2, sep = "_")) 
 
+# Filtering ----
+
+# Filter to require either CD8 expression or TCR sequence present
 sink(file.path(log_dir, "cd8_tcr_filtering.txt"))
-print("before filtering")
+print("before CD8 filtering")
 table(seurat_obj$Sample)
 
-print("after filtering")
 seurat_obj <- filter_CD8(seurat_obj)
+print("after CD8 filtering")
+table(seurat_obj$Sample)
+
+# Filter for maximum genes expressed
+seurat_obj <- subset(seurat_obj, subset = nFeature_RNA < max_features)
+print("after max gene filtering")
 table(seurat_obj$Sample)
 sink()
 
@@ -211,8 +219,11 @@ seurat_rpca <- ProjectData(object = seurat_rpca,
                           #umap.model = "umap", to use the sketched umap?
                           dims = 1:30)
 
-# Vignette https://satijalab.org/seurat/articles/seurat5_sketch_analysis
+# Note - vignette https://satijalab.org/seurat/articles/seurat5_sketch_analysis
 # extends UMAP, other vignette reruns it
+
+# Add condition * cluster to metadata
+seurat_rpca$Condition = gsub("[0-9]+$", "", seurat_rpca$Condition)
 
 seurat_rpca[["sketch"]] <- JoinLayers(seurat_rpca[["sketch"]])
 
@@ -224,7 +235,7 @@ seurat_rpca <- RunUMAP(seurat_rpca,
                   reduction.key = "UMAPfull_")
 
 # UMAP of integrated data, all samples
-pdf(file.path(fig_dir, "umap_sketch_rpca_full_scratch.pdf"))
+pdf(file.path(fig_dir, "umap_sketch_rpca_full.pdf"))
 DimPlot(seurat_rpca,
         reduction = "umap.full", 
         group.by = "Sample")
@@ -254,19 +265,9 @@ write_rds(seurat_rpca,
           "integrated_sketch_rpca.rds")
 
 
-# Plot cluster by sample
-#n_sample_cluster <- seurat_rpca[[]] %>%
-#    dplyr::select(Sample, seurat_clusters) %>%
-#    dplyr::group_by(Sample, seurat_clusters) %>%
-#    dplyr::summarise(n_sample_cluster = n()) %>%
-#    dplyr::group_by(Sample) %>%
-#    dplyr::mutate(n_sample = sum(n_sample_cluster),
-#                  pct_cluster = n_sample_cluster/n_sample * 100,
-#                  seurat_clusters = as.factor(seurat_clusters)) %>%
-#    dplyr::arrange(desc(pct_cluster))
+# Plot cluster by sample ----
 
-
-pdf("bar_cluster_sample.pdf")
+pdf(file.path(fig_dir, "bar_cluster_sample.pdf"))
 ggplot(seurat_rpca[[]], aes(x = seurat_clusters, fill = Sample)) +
     geom_bar(position = "fill", color = "black") +
     scale_y_continuous(expand = expansion(c(0,0))) +
@@ -277,14 +278,24 @@ ggplot(seurat_rpca[[]], aes(x = seurat_clusters, fill = Sample)) +
 dev.off()
 
 
-features <- VariableFeatures(seurat_rpca)
-features <- features[! grepl("^TR[AB]", features)][1:50]
-pdf("cluster_feature_heatmap.pdf", width = 12, height = 10)
-DoHeatmap(seurat_rpca,
-          features = features)
+
+pdf(file.path(fig_dir, "bar_cluster_sample_unscaled.pdf"))
+ggplot(seurat_rpca[[]], aes(x = seurat_clusters, fill = Sample)) +
+    geom_bar(color = "black") +
+    scale_y_continuous(expand = expansion(c(0,0))) +
+    scale_x_discrete(expand = expansion(c(0,0))) +
+    coord_flip() + 
+    theme_bw() + 
+    labs(x = NULL, y = "Number of cells")
 dev.off()
 
 
+# ----
+
+DefaultAssay(seurat_rpca) <- "RNA"
+seurat_rpca[["RNA"]] <- JoinLayers(seurat_rpca[["RNA"]])
+
+# Pseudobulk
 pseudo_rpca <- AggregateExpression(seurat_rpca,
                                    assays = "RNA",
                                    return.seurat = TRUE,
@@ -292,14 +303,25 @@ pseudo_rpca <- AggregateExpression(seurat_rpca,
 
 Idents(pseudo_rpca) <- "seurat_clusters"
 
-bulk_cluster_markers <- FindAllMarkers(object = pseudo_rpca,
-                                       min.pct = 0)
+bulk_cl_markers <- FindAllMarkers(object = pseudo_rpca,
+                                  min.pct = 0)
 
-features <- bulk_cluster_markers %>%
+features <- bulk_cl_markers %>%
     dplyr::filter(! grepl("^TR[AB]", gene)) %>%
     dplyr::group_by(cluster) %>%
     dplyr::slice_head(n = 5) %>%
     pull(gene)
+
+seurat_rpca <- ScaleData(seurat_rpca)
+
+pdf("cluster_feature_heatmap.pdf", width = 12, height = 10)
+DoHeatmap(seurat_rpca,
+          features = features)
+dev.off()
+
+
+
+
 
 
 var_features <- VariableFeatures(seurat_rpca)
