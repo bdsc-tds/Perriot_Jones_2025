@@ -23,6 +23,7 @@ project_dir <- tryCatch({Sys.getenv()[["project_dir"]]},
 scratch_dir <- tryCatch({Sys.getenv()[["scratch_dir"]]},
                         error = function(cond){return(".")})
 data_dir <- file.path(project_dir, "data")
+de_results <- file.path(project_dir, "results/differential_expression")
 fig_dir <- file.path(project_dir, "figures")
 log_dir <- file.path(project_dir, "logs")
 
@@ -222,9 +223,6 @@ seurat_rpca <- ProjectData(object = seurat_rpca,
 # Note - vignette https://satijalab.org/seurat/articles/seurat5_sketch_analysis
 # extends UMAP, other vignette reruns it
 
-# Add condition * cluster to metadata
-seurat_rpca$Condition = gsub("[0-9]+$", "", seurat_rpca$Condition)
-
 seurat_rpca[["sketch"]] <- JoinLayers(seurat_rpca[["sketch"]])
 
 # Run UMAP on the full projected data ---- 
@@ -278,7 +276,6 @@ ggplot(seurat_rpca[[]], aes(x = seurat_clusters, fill = Sample)) +
 dev.off()
 
 
-
 pdf(file.path(fig_dir, "bar_cluster_sample_unscaled.pdf"))
 ggplot(seurat_rpca[[]], aes(x = seurat_clusters, fill = Sample)) +
     geom_bar(color = "black") +
@@ -291,6 +288,13 @@ dev.off()
 
 
 # ----
+# Differential expression ----
+
+# Add condition * cluster to metadata
+seurat_rpca$Condition <- as.factor(gsub("[0-9]+(-dis)?$", "", seurat_rpca$Sample))
+seurat_rpca$Cond_Cl <- paste(seurat_rpca$Condition,
+                             seurat_rpca$seurat_clusters,
+                             sep = "_")
 
 DefaultAssay(seurat_rpca) <- "RNA"
 seurat_rpca[["RNA"]] <- JoinLayers(seurat_rpca[["RNA"]])
@@ -301,33 +305,75 @@ pseudo_rpca <- AggregateExpression(seurat_rpca,
                                    return.seurat = TRUE,
                                    group.by = c("Sample", "seurat_clusters"))
 
+# Differential expression between clusters ----
 Idents(pseudo_rpca) <- "seurat_clusters"
-
 bulk_cl_markers <- FindAllMarkers(object = pseudo_rpca,
-                                  min.pct = 0)
+                                  min.pct = 0,
+                                  test.use = "DESeq2")
+
+write_csv(bulk_cl_markers,
+          file.path(de_results, "cluster_markers_all_samples.csv"))
 
 features <- bulk_cl_markers %>%
-    dplyr::filter(! grepl("^TR[AB]", gene)) %>%
+    dplyr::filter(! grepl("^TR[AB]", gene),
+                  p_val_adj <= 0.01,
+                  abs(avg_log2FC) > 0.5) %>%
     dplyr::group_by(cluster) %>%
     dplyr::slice_head(n = 5) %>%
-    pull(gene)
+    pull(gene) %>%
+    unique()
 
-seurat_rpca <- ScaleData(seurat_rpca)
-
-pdf("cluster_feature_heatmap.pdf", width = 12, height = 10)
-DoHeatmap(seurat_rpca,
-          features = features)
-dev.off()
-
-
-
-
-
-
-var_features <- VariableFeatures(seurat_rpca)
-var_features <- var_features[! grepl("^TR[AB]", var_features)][1:50]
-pdf("cluster_feature_heatmap_pseudobulk.pdf", width = 12, height = 10)
+# Cluster heatmap for pseudobulked data
+pdf(file.path(fig_dir, "sketch_rpca_cluster_heatmap_pseudobulk.pdf"),
+    width = 12, height = 12)
 DoHeatmap(pseudo_rpca,
-          features = features)
+          features = features) +
+    theme(axis.text = element_text(size = 8))
 dev.off()
+
+#seurat_rpca <- ScaleData(seurat_rpca)
+
+# Differential expression between clusters, without Ri01-5m ----
+
+Idents(pseudo_rpca) <- pseudo_rpca$Sample
+pseudo_subs <- subset(pseudo_rpca,
+                    idents = setdiff(unique(pseudo_rpca$Sample), c("Ri01-5m")))
+
+
+# Differential expression between HD and CL, per cluster ----
+
+pseudo_subs$Condition <- as.factor(gsub("[0-9]+(-dis)?$", "", pseudo_subs$Sample))
+
+Idents(pseudo_subs) <- pseudo_subs$Condition
+pseudo_rpca_by_cl <- SplitObject(pseudo_subs,
+                                 split.by = "seurat_clusters")
+
+
+hd_vs_ri <- lapply(seq_along(pseudo_rpca_by_cl), function(i){
+    mk <- FindAllMarkers(object = pseudo_rpca_by_cl[[i]],
+                min.pct = 0,
+                test.use = "DESeq2") 
+    if (nrow(mk) > 0){
+        mk <- mk %>%
+            # Filter so logFC always refers to HD vs Ri
+            dplyr::filter(cluster == "HD") %>%
+            dplyr::mutate(cluster = i)
+    }
+    mk
+})
+
+hd_vs_ri <- bind_rows(hd_vs_ri)
+
+write_csv(hd_vs_ri,
+          file.path(de_results, "cluster_markers_hd_v_ri_without_Ri01dis.csv"))
+
+hd_vs_ri_sig <- hd_vs_ri %>%
+    dplyr::filter(p_val_adj <= 0.01,
+                  abs(avg_log2FC) > 0.5)
+
+write_csv(hd_vs_ri,
+          file.path(de_results,
+                    "cluster_markers_hd_v_ri_without_Ri01dis_sig.csv"))
+
+# To do - adjust TCR for cellbender ----
 

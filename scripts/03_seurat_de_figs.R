@@ -727,7 +727,7 @@ dev.off()
 # -------------------------------------------------------------------
 
 # Setup Seurat object for Ri02 ----
-Idents(seurat_obj) <- seurat_obj@meta.data$Sample
+Idents(seurat_obj) <- seurat_obj$Sample
 ri02 <- subset(seurat_obj, idents = c("Ri02"))
 
 # Reset Idents to clusters for Ri02
