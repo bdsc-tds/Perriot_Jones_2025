@@ -1,8 +1,8 @@
 # Libraries and setup ----
 
 library("ggplot2")
-library("khroma") # add to singularity
-library("DESeq2") # add to singularity
+library("khroma") 
+library("DESeq2") 
 library("patchwork")
 library("pheatmap")
 library("Seurat")

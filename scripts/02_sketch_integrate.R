@@ -249,6 +249,17 @@ DimPlot(seurat_rpca,
         ncol = 3)
 dev.off()
 
+
+# Split by cluster - to do - change to highlight cluster on gray
+pdf(file.path(fig_dir, "umap_sketch_rpca_full_sample_by_cluster.pdf"),
+    height = 15, width = 12)
+DimPlot(seurat_rpca,
+        group.by = "Sample",
+        split.by = "seurat_clusters",
+        reduction = "umap.full",
+        ncol = 3)
+dev.off()
+
 # FeaturePlot with CD8A and CD8B 
 pdf(file.path(fig_dir, "umap_sketch_rpca_cd8a_cd8b_scratch.pdf"),
     width = 10)
@@ -257,6 +268,24 @@ FeaturePlot(seurat_rpca,
             features = c("CD8A", "CD8B"))
 dev.off()
 
+# UMAP selected markers of interest ----
+library("patchwork")
+
+fig2b_markers <- c("BCL2", "CCR7", "TCF7", "PRF1", "CXCR3",
+                   "GZMB", "IL2RB", "CD27", "SELL")
+
+
+pdf(file.path(fig_dir, "umap_selected_markers.pdf"), width = 8)
+fp <- FeaturePlot(seurat_rpca, features = fig2b_markers, keep.scale = "all",
+                  cols = c("lightgray", "gold", "firebrick")) +
+    plot_layout(guides = "collect") &
+    theme(axis.line = element_blank(),
+          axis.title = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank()) &
+    labs(color = "log2 Exp")
+print(fp)
+dev.off()
 
 # Save integrated data ----
 write_rds(seurat_rpca,
@@ -265,7 +294,7 @@ write_rds(seurat_rpca,
 
 # Plot cluster by sample ----
 
-pdf(file.path(fig_dir, "bar_cluster_sample.pdf"))
+pdf(file.path(fig_dir, "bar_sample_per_cluster_.pdf"))
 ggplot(seurat_rpca[[]], aes(x = seurat_clusters, fill = Sample)) +
     geom_bar(position = "fill", color = "black") +
     scale_y_continuous(expand = expansion(c(0,0))) +
@@ -276,7 +305,7 @@ ggplot(seurat_rpca[[]], aes(x = seurat_clusters, fill = Sample)) +
 dev.off()
 
 
-pdf(file.path(fig_dir, "bar_cluster_sample_unscaled.pdf"))
+pdf(file.path(fig_dir, "bar_sample_per_cluster_unscaled.pdf"))
 ggplot(seurat_rpca[[]], aes(x = seurat_clusters, fill = Sample)) +
     geom_bar(color = "black") +
     scale_y_continuous(expand = expansion(c(0,0))) +
@@ -285,6 +314,29 @@ ggplot(seurat_rpca[[]], aes(x = seurat_clusters, fill = Sample)) +
     theme_bw() + 
     labs(x = NULL, y = "Number of cells")
 dev.off()
+
+
+pdf(file.path(fig_dir, "bar_cluster_per_sample.pdf"))
+ggplot(seurat_rpca[[]], aes(fill = seurat_clusters, x = Sample)) +
+    geom_bar(position = "fill", color = "black") +
+    scale_y_continuous(expand = expansion(c(0,0))) +
+    scale_x_discrete(expand = expansion(c(0,0))) +
+    coord_flip() + 
+    theme_bw() + 
+    labs(x = NULL, y = "Proportion of cells")
+dev.off()
+
+# Normalise by total counts per sample
+
+cl_pct <- seurat_rpca[[]] %>%
+    dplyr::select(Sample, seurat_clusters) %>%
+    dplyr::group_by(Sample) %>%
+    dplyr::mutate(n_sample = n()) %>%
+    dplyr::group_by(Sample, seurat_clusters, n_sample) %>%
+    dplyr::summarise(n_sample_cl = n()) %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(cl_pct = n_sample_cl/n_sample * 100) 
+
 
 
 # ----
@@ -371,9 +423,52 @@ hd_vs_ri_sig <- hd_vs_ri %>%
     dplyr::filter(p_val_adj <= 0.01,
                   abs(avg_log2FC) > 0.5)
 
-write_csv(hd_vs_ri,
+write_csv(hd_vs_ri_sig,
           file.path(de_results,
                     "cluster_markers_hd_v_ri_without_Ri01dis_sig.csv"))
+
+
+source(file.path(project_dir, "scripts/clones_of_interest.R"))
+
+seurat_rpca[[]] %>%
+    dplyr::filter(beta_aa == coi) %>%
+    dplyr::select(Sample, seurat_clusters) %>%
+    dplyr::group_by(across(everything())) %>%
+    dplyr::summarise(n = n()) %>%
+    dplyr::arrange(desc(n)) %>%
+    write_csv(file.path(project_dir, "results/clone_of_interest.csv"))
+
+
+seurat_rpca$coi <- seurat_rpca$beta_aa == coi
+
+#p1_rem <- DimPlot(ri01, group.by = "Sample",
+#                  cols = c("lightgray", "#DC050C"), order = "Ri01_5m") +
+#    guides(color = "none")
+
+coi_cells <- seurat_rpca[[]] %>%
+    dplyr::filter(coi) %>%
+    rownames()
+
+
+pdf(file.path(fig_dir, "umap_coi_by_sample.pdf"),
+    height = 12, width = 12)
+DimPlot(seurat_rpca,
+        group.by = "coi",
+        #pt.size = c(0.5,4)[as.numeric(seurat_rpca$coi) + 1],
+        #cells.highlight = coi_cells,
+        #sizes.highlight = 4,
+        #cols.highlight = "#DC050C",
+        cols = c("lightgray", "#DC050C"), order = "TRUE",
+        split.by = "Sample",
+        reduction = "umap.full",
+        ncol = 3)
+dev.off()
+
+
+
+
+
+
 
 # To do - adjust TCR for cellbender ----
 
