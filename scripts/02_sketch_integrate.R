@@ -250,15 +250,6 @@ DimPlot(seurat_rpca,
 dev.off()
 
 
-# Split by cluster - to do - change to highlight cluster on gray
-pdf(file.path(fig_dir, "umap_sketch_rpca_full_sample_by_cluster.pdf"),
-    height = 15, width = 12)
-DimPlot(seurat_rpca,
-        group.by = "Sample",
-        split.by = "seurat_clusters",
-        reduction = "umap.full",
-        ncol = 3)
-dev.off()
 
 # FeaturePlot with CD8A and CD8B 
 pdf(file.path(fig_dir, "umap_sketch_rpca_cd8a_cd8b_scratch.pdf"),
@@ -290,6 +281,55 @@ dev.off()
 # Save integrated data ----
 write_rds(seurat_rpca,
           "integrated_sketch_rpca.rds")
+
+
+# Add UMAP coordinates to metadata and save ----
+
+um <- Embeddings(seurat_rpca[["umap.full"]])
+identical(rownames(um), rownames(seurat_rpca[[]]))
+seurat_rpca[[]] <- dplyr::bind_cols(seurat_rpca[[]], um)
+write_csv(seurat_rpca[[]],
+          "integrated_sketch_rpca_md.csv")
+
+# UMAP by sample (manually) ----
+
+seurat_by_cl <- SplitObject(seurat_rpca,
+                            split.by = "seurat_clusters")
+
+# Get the default colours used in the seurat generated UMAP
+cl_names <- levels(Idents(seurat_rpca))
+n_clusters <- length(cl_names)
+default_pal <- structure(scales::hue_pal()(n_clusters),
+                         names = cl_names)
+
+cl_umaps <- lapply(names(seurat_by_cl), function(cl){
+    ggplot(seurat_rpca[[]], 
+           aes(x = UMAPfull_1, y = UMAPfull_2)) +
+        geom_point(aes(size = is_coi, colour = coi)) +
+        scale_size_identity() +
+        facet_wrap(~Sample) +
+        theme_minimal(base_size = 15) +
+        scale_color_manual(labels = names(coi_colours), values = coi_colours) +
+        labs(x = "UMAP dimension 1", y = "UMAP dimension 2") +
+        theme(panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank())
+})
+
+
+
+
+
+# Split by cluster - to do - change to highlight cluster on gray
+pdf(file.path(fig_dir, "umap_sketch_rpca_full_sample_by_cluster.pdf"),
+    height = 15, width = 12)
+DimPlot(seurat_rpca,
+        group.by = "Sample",
+        split.by = "seurat_clusters",
+        reduction = "umap.full",
+        ncol = 3)
+dev.off()
+
+
 
 
 # Plot cluster by sample ----
@@ -327,15 +367,27 @@ ggplot(seurat_rpca[[]], aes(fill = seurat_clusters, x = Sample)) +
 dev.off()
 
 # Normalise by total counts per sample
-
-cl_pct <- seurat_rpca[[]] %>%
-    dplyr::select(Sample, seurat_clusters) %>%
-    dplyr::group_by(Sample) %>%
-    dplyr::mutate(n_sample = n()) %>%
-    dplyr::group_by(Sample, seurat_clusters, n_sample) %>%
-    dplyr::summarise(n_sample_cl = n()) %>%
-    dplyr::ungroup() %>%
-    dplyr::mutate(cl_pct = n_sample_cl/n_sample * 100) 
+# 
+# cl_pct <- seurat_rpca[[]] %>%
+#     dplyr::select(Sample, seurat_clusters) %>%
+#     dplyr::group_by(Sample) %>%
+#     dplyr::mutate(n_sample = n()) %>%
+#     dplyr::group_by(Sample, seurat_clusters, n_sample) %>%
+#     dplyr::summarise(n_sample_cl = n()) %>%
+#     dplyr::ungroup() %>%
+#     dplyr::mutate(cl_pct = n_sample_cl/n_sample * 100) 
+# 
+# # Cluster proportions by sample
+# 
+# pdf(file.path(fig_dir, "bar_sample_ppn_per_cluster.pdf"))
+# ggplot(cl_pct, aes(x = seurat_clusters, y = cl_pct, fill = Sample)) +
+#     geom_bar(color = "black", stat = "identity") +
+#     scale_y_continuous(expand = expansion(c(0,0))) +
+#     scale_x_discrete(expand = expansion(c(0,0))) +
+#     coord_flip() + 
+#     theme_bw() + 
+#     labs(x = NULL, y = "Proportion of cells")
+# dev.off()
 
 
 
@@ -428,46 +480,99 @@ write_csv(hd_vs_ri_sig,
                     "cluster_markers_hd_v_ri_without_Ri01dis_sig.csv"))
 
 
+# Clones of interest ----
+
 source(file.path(project_dir, "scripts/clones_of_interest.R"))
 
+# Counts of clone of interest per sample
 seurat_rpca[[]] %>%
-    dplyr::filter(beta_aa == coi) %>%
-    dplyr::select(Sample, seurat_clusters) %>%
+    dplyr::filter(beta_aa %in% c(ri01_coi, ri02_coi)) %>%
+    dplyr::select(Sample, seurat_clusters, beta_aa) %>%
     dplyr::group_by(across(everything())) %>%
     dplyr::summarise(n = n()) %>%
     dplyr::arrange(desc(n)) %>%
     write_csv(file.path(project_dir, "results/clone_of_interest.csv"))
 
+# UMAP with clone of interest highlighted, separated by sample
 
-seurat_rpca$coi <- seurat_rpca$beta_aa == coi
-
-#p1_rem <- DimPlot(ri01, group.by = "Sample",
-#                  cols = c("lightgray", "#DC050C"), order = "Ri01_5m") +
-#    guides(color = "none")
-
-coi_cells <- seurat_rpca[[]] %>%
-    dplyr::filter(coi) %>%
-    rownames()
+seurat_rpca[[]] <- seurat_rpca[[]] %>%
+    dplyr::mutate(coi = case_when(beta_aa == ri01_coi ~ "Ri01",
+                                  beta_aa == ri02_coi ~ "Ri02",
+                                  TRUE ~ "no"))
 
 
-pdf(file.path(fig_dir, "umap_coi_by_sample.pdf"),
+seurat_rpca$is_coi = c(2, 0.5)[as.numeric(seurat_rpca$coi == "no") + 1]
+seurat_rpca[[]] <- seurat_rpca[[]] %>%
+    dplyr::mutate(coi = factor(coi, levels = c("no", "Ri01", "Ri02"))) %>%
+    dplyr::arrange(coi) %>%
+    dplyr::mutate(coi = as.character(coi))
+
+
+coi_colours <- structure(c("lightgray","#DC050C","steelblue"),
+                         names = c("no", "Ri01", "Ri02"))
+
+
+pdf(file.path(fig_dir, "umap_coi_by_sample_manual.pdf"),
     height = 12, width = 12)
-DimPlot(seurat_rpca,
-        group.by = "coi",
-        #pt.size = c(0.5,4)[as.numeric(seurat_rpca$coi) + 1],
-        #cells.highlight = coi_cells,
-        #sizes.highlight = 4,
-        #cols.highlight = "#DC050C",
-        cols = c("lightgray", "#DC050C"), order = "TRUE",
-        split.by = "Sample",
-        reduction = "umap.full",
-        ncol = 3)
+ggplot(seurat_rpca[[]], #%>% arrange(coi, descending = TRUE), 
+       aes(x = UMAPfull_1, y = UMAPfull_2)) +
+    geom_point(aes(size = is_coi, colour = coi)) +
+    scale_size_identity() +
+    facet_wrap(~Sample) +
+    theme_minimal(base_size = 15) +
+    scale_color_manual(labels = names(coi_colours), values = coi_colours) +
+    labs(x = "UMAP dimension 1", y = "UMAP dimension 2") +
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank())
+
 dev.off()
 
 
+# Clone composition of clusters containing clones of interest ----
 
+# Select clusters with at least 5 clones of interest,
+# regardless of sample and sequence
+clusters_w_roi = meta %>%
+    dplyr::filter(! coi == "no") %>%
+    dplyr::group_by(seurat_clusters) %>%
+    dplyr::summarise(n = n()) %>%
+    dplyr::filter(n >= 5) %>%
+    dplyr::pull(seurat_clusters) %>%
+    unique()
 
+clones_in_coi <- meta %>%
+    dplyr::filter(seurat_clusters %in% clusters_w_roi) %>%
+    dplyr::group_by(seurat_clusters, Sample, coi) %>%
+    dplyr::mutate(n_sample_cluster = n()) %>%
+    dplyr::group_by(seurat_clusters,
+                    Sample,
+                    coi,
+                    CTaa2,
+                    beta_aa,
+                    n_sample_cluster) %>%
+    dplyr::summarise(n = n()) %>%
+    dplyr::filter(! beta_aa == "NA_NA") %>%
+    dplyr::arrange(seurat_clusters, desc(n)) %>%
+    dplyr::mutate(pct_sample_cluster = n / n_sample_cluster * 100)
 
+write_csv(clones_in_coi, 
+          file.path(project_dir, "results/clusters_containing_coi.csv"))
+
+# Run scRepertoire positional entropy
+
+coi_cl_subs <- subset(seurat_rpca,
+                      subset = seurat_clusters %in% clusters_w_roi)
+coi_cl_subs <- SplitObject(coi_cl_subs, split.by = "seurat_clusters")
+
+dummy <- lapply(names(coi_cl_subs), function(nm){
+    pdf(file.path(fig_dir, 
+                  sprintf("positional_entropy_cl_%s.pdf", nm)))
+    positionalEntropy(cells_in_coi_clusters)
+    dev.off()
+})
+
+# WORKING HERE 
+    
 
 
 # To do - adjust TCR for cellbender ----
