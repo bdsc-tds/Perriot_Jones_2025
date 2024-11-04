@@ -184,24 +184,6 @@ seurat_rpca <- RunUMAP(seurat_rpca,
                       reduction = "integrated.rpca",
                       dims = 1:30)
 
-# UMAP on sketched data ----
-# UMAP on the integrated, sketched cells
-pdf(file.path(fig_dir, "umap_sketch_rpca.pdf"))
-DimPlot(seurat_rpca,
-        group.by = "Sample",
-        reduction = "umap")
-dev.off()
-
-pdf(file.path(fig_dir, "umap_sketch_rpca_cluster_by_sample.pdf"),
-    height = 12, width = 9)
-DimPlot(seurat_rpca,
-        group.by = "seurat_clusters",
-        split.by = "Sample",
-        reduction = "umap",
-        ncol = 3)
-dev.off()
-
-
 # Project to full data ----
 # At this point, only the 5000 sketched cells have cluster annotation 
 # Project the other cells into the integrated space 
@@ -227,57 +209,12 @@ seurat_rpca <- ProjectData(object = seurat_rpca,
 seurat_rpca[["sketch"]] <- JoinLayers(seurat_rpca[["sketch"]])
 
 # Run UMAP on the full projected data ---- 
+
 seurat_rpca <- RunUMAP(seurat_rpca,
-                  reduction = "integrated.rpca.full",
-                  dims = 1:30,
-                  reduction.name = "umap.full",
-                  reduction.key = "UMAPfull_")
-
-# UMAP of integrated data, all samples
-pdf(file.path(fig_dir, "umap_sketch_rpca_full.pdf"))
-DimPlot(seurat_rpca,
-        reduction = "umap.full", 
-        group.by = "Sample")
-dev.off()
-
-
-pdf(file.path(fig_dir, "umap_sketch_rpca_full_cluster_by_sample.pdf"),
-    height = 12, width = 9)
-DimPlot(seurat_rpca,
-        group.by = "seurat_clusters",
-        split.by = "Sample",
-        reduction = "umap.full",
-        ncol = 3)
-dev.off()
-
-
-
-# FeaturePlot with CD8A and CD8B 
-pdf(file.path(fig_dir, "umap_sketch_rpca_cd8a_cd8b_scratch.pdf"),
-    width = 10)
-FeaturePlot(seurat_rpca,
-            reduction = "umap.full", 
-            features = c("CD8A", "CD8B"))
-dev.off()
-
-# UMAP selected markers of interest ----
-library("patchwork")
-
-fig2b_markers <- c("BCL2", "CCR7", "TCF7", "PRF1", "CXCR3",
-                   "GZMB", "IL2RB", "CD27", "SELL")
-
-
-pdf(file.path(fig_dir, "umap_selected_markers.pdf"), width = 8)
-fp <- FeaturePlot(seurat_rpca, features = fig2b_markers, keep.scale = "all",
-                  cols = c("lightgray", "gold", "firebrick")) +
-    plot_layout(guides = "collect") &
-    theme(axis.line = element_blank(),
-          axis.title = element_blank(),
-          axis.text = element_blank(),
-          axis.ticks = element_blank()) &
-    labs(color = "log2 Exp")
-print(fp)
-dev.off()
+                       reduction = "integrated.rpca.full",
+                       dims = 1:30,
+                       reduction.name = "umap.full",
+                       reduction.key = "UMAPfull_")
 
 # Save integrated data ----
 write_rds(seurat_rpca,

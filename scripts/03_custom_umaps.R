@@ -33,7 +33,7 @@ cl_umaps <- lapply(cl_names, function(cl){
     
     pl <- ggplot(meta_cl, 
                  aes(x = UMAPfull_1, y = UMAPfull_2)) +
-        geom_point(aes(colour = is_cl), size = 0.5) +
+        geom_point(aes(colour = is_cl), size = 0.5) + # Reduce with geom_hexbin?
         theme_minimal(base_size = 15) +
         scale_color_manual(labels = c(FALSE, TRUE),
                            values = c("lightgray", default_pal[[cl]]),
