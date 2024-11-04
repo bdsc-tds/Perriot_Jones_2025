@@ -9,7 +9,6 @@ library("tidyverse")
 
 set.seed(7620)
 
-
 # Filtering and integration parameters
 min_cells <- 10 # keep features expressed in at least 10 cells
 min_features <- 100 # require at least 100 genes expressed
@@ -393,7 +392,6 @@ write_csv(hd_vs_ri_sig,
 
 
 
-
 # Run scRepertoire positional entropy
 
 coi_cl_subs <- subset(seurat_rpca,
@@ -410,6 +408,10 @@ dummy <- lapply(names(coi_cl_subs), function(nm){
 # WORKING HERE 
     
 
+# 
 
-# To do - adjust TCR for cellbender ----
+
+
+
+# TO DO - adjust TCR for cellbender ----
 
