@@ -13,13 +13,13 @@ source(file.path(project_dir, "scripts/clones_of_interest.R"))
 # Clones of interest ----
 
 # Counts of clone of interest per sample
-seurat_rpca[[]] %>%
+meta %>%
     dplyr::filter(beta_aa %in% c(ri01_coi, ri02_coi)) %>%
     dplyr::select(Sample, seurat_clusters, beta_aa) %>%
     dplyr::group_by(across(everything())) %>%
     dplyr::summarise(n = n()) %>%
     dplyr::arrange(desc(n)) %>%
-    write_csv(file.path(project_dir, "results/clone_of_interest.csv"))
+    write_csv(file.path(project_dir, "results/coi/clone_of_interest.csv"))
 
 # Clone composition of clusters containing clones of interest ----
 
@@ -49,7 +49,7 @@ clones_in_coi <- meta %>%
     dplyr::mutate(pct_sample_cluster = n / n_sample_cluster * 100)
 
 write_csv(clones_in_coi, 
-          file.path(project_dir, "results/clusters_containing_coi.csv"))
+          file.path(project_dir, "results/coi/clones_in_clusters_with_coi.csv"))
 
 
 # Top clones per cluster and donor ----
@@ -85,12 +85,12 @@ all_clones <- meta %>%
 
 write_csv(all_clones,
           file.path(project_dir,
-                    "results/counts_all_clones_by_sample_cluster.csv"))
+                    "results/coi/counts_all_clones_by_sample_cluster.csv"))
 
 # Filter for clones that account for at least 1% of the sample
 top_clones <- all_clones %>%
     dplyr::filter(pct_sample >= 1) %>%
     write_csv(file.path(project_dir,
-                        "results/counts_filtered_clones_by_sample_cluster.csv"))
+                        "results/coi/counts_filtered_clones_by_sample_cluster.csv"))
 
     

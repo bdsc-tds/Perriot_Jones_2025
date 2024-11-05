@@ -33,9 +33,10 @@ cl_umaps <- lapply(cl_names, function(cl){
     
     pl <- ggplot(meta_cl, 
                  aes(x = UMAPfull_1, y = UMAPfull_2)) +
-        geom_point(aes(colour = is_cl), size = 0.5) + # Reduce with geom_hexbin?
+        geom_hex(aes(fill = is_cl)) + 
+        #geom_point(aes(colour = is_cl), size = 0.5) + 
         theme_minimal(base_size = 15) +
-        scale_color_manual(labels = c(FALSE, TRUE),
+        scale_fill_manual(labels = c(FALSE, TRUE),
                            values = c("lightgray", default_pal[[cl]]),
                            guide = NULL) +
         labs(title = cl,
@@ -46,9 +47,9 @@ cl_umaps <- lapply(cl_names, function(cl){
     pl
 })
 
-pdf(file.path(project_dir, "figures/umap_split_by_clusters.pdf"),
-    width = 10, height = 15)
-wrap_plots(cl_umaps, ncol = 3)
+pdf(file.path(project_dir, "figures/umap_sketch_rpca_split_by_clusters.pdf"),
+    width = 12, height = 13)
+wrap_plots(cl_umaps, ncol = 4)
 dev.off()
 
 

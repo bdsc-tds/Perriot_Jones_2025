@@ -317,7 +317,7 @@ hd_vs_ri <- lapply(seq_along(pseudo_rpca_by_cl), function(i){
 hd_vs_ri <- bind_rows(hd_vs_ri)
 
 write_csv(hd_vs_ri,
-          file.path(de_results, "cluster_markers_hd_v_ri_without_Ri01dis.csv"))
+          file.path(de_results, "cluster_markers_hd_v_ri_without_Ri01_5m.csv"))
 
 hd_vs_ri_sig <- hd_vs_ri %>%
     dplyr::filter(p_val_adj <= 0.01,
@@ -325,11 +325,19 @@ hd_vs_ri_sig <- hd_vs_ri %>%
 
 write_csv(hd_vs_ri_sig,
           file.path(de_results,
-                    "cluster_markers_hd_v_ri_without_Ri01dis_sig.csv"))
+                    "cluster_markers_hd_v_ri_without_Ri01_5m_sig.csv"))
 
 
 
 # Run scRepertoire positional entropy
+
+clusters_w_roi = seurat_rpca[[]] %>%
+    dplyr::filter(! coi == "no") %>%
+    dplyr::group_by(seurat_clusters) %>%
+    dplyr::summarise(n = n()) %>%
+    dplyr::filter(n >= 5) %>%
+    dplyr::pull(seurat_clusters) %>%
+    unique()
 
 coi_cl_subs <- subset(seurat_rpca,
                       subset = seurat_clusters %in% clusters_w_roi)
@@ -338,10 +346,12 @@ coi_cl_subs <- SplitObject(coi_cl_subs, split.by = "seurat_clusters")
 dummy <- lapply(names(coi_cl_subs), function(nm){
     pdf(file.path(fig_dir, 
                   sprintf("positional_entropy_cl_%s.pdf", nm)))
-    positionalEntropy(cells_in_coi_clusters)
+    scRepertoire::positionalEntropy(coi_cl_subs)
     dev.off()
 })
 
+# Error
+#  Please provide rownames to the matrix before converting to a Graph
 # WORKING HERE 
     
 
