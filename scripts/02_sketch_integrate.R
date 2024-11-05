@@ -254,6 +254,8 @@ coi_nbrs <- tibble(cell = rep(Cells(coi_cells), each = n_nbrs),
                    neighbour = unlist(coi_nbrs),
                    nbr_coi = neighbour %in% Cells(coi_cells))
 
+coi_nbr_obj <- subset(seurat_rpca,
+                   cells = coi_nbrs$neighbour)
 
 
 
