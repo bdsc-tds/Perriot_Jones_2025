@@ -15,6 +15,7 @@ min_features <- 100 # require at least 100 genes expressed
 max_features <- 6000 # require at most 6000 genes expressed
 max_percent_mt <- 10 # keep if not more than 10% mitochondrial reads 
 n_sketch <- 5000 # Number of cells for sketch
+cluster_res <- 0.5 
 
 # Check for directory environment variables 
 project_dir <- tryCatch({Sys.getenv()[["project_dir"]]},
@@ -179,7 +180,7 @@ seurat_rpca <- IntegrateLayers(seurat_obj,
 seurat_rpca <- FindNeighbors(seurat_rpca,
                             reduction = "integrated.rpca",
                             dims = 1:30)
-seurat_rpca <- FindClusters(seurat_rpca)
+seurat_rpca <- FindClusters(seurat_rpca, resolution = cluster_res)
 seurat_rpca <- RunUMAP(seurat_rpca,
                       reduction = "integrated.rpca",
                       dims = 1:30)
@@ -218,10 +219,10 @@ seurat_rpca <- RunUMAP(seurat_rpca,
 
 # Save integrated data ----
 write_rds(seurat_rpca,
-          "integrated_sketch_rpca.rds")
+          "integrated_sketch_rpca_res_0_5.rds")
 
 
-# Add UMAP coordinates and clone of interest to metadata and save ----
+# Add UMAP coordinates and clone of interest to metadata ----
 
 um <- Embeddings(seurat_rpca[["umap.full"]])
 identical(rownames(um), rownames(seurat_rpca[[]]))
@@ -232,8 +233,32 @@ seurat_rpca[[]] <- seurat_rpca[[]] %>%
                                   beta_aa == ri02_coi ~ "Ri02",
                                   TRUE ~ "no"))
 
+# Add top neighbours of clones of interest to metadata and save ----
+coi_cells <- subset(seurat_rpca,
+                    cells = which(! seurat_rpca$coi == "no"))
+
+nbr <- seurat_rpca[["sketch.nn"]]
+table(Cells(coi_cells) %in% Cells(nbr))
+
+# These are the neighbours within the sketch
+nbr <- FindNeighbors(seurat_rpca, return.neighbor = TRUE)
+
+
+n_nbrs <- 5
+
+coi_nbrs <- lapply(Cells(coi_cells), function(cell){ 
+    TopNeighbors(nbr, cell, n = n_nbrs)
+    })
+
+coi_nbrs <- tibble(cell = rep(Cells(coi_cells), each = n_nbrs),
+                   neighbour = unlist(coi_nbrs),
+                   nbr_coi = neighbour %in% Cells(coi_cells))
+
+
+
+
 write_csv(seurat_rpca[[]],
-          "integrated_sketch_rpca_md.csv")
+          "integrated_sketch_rpca_res_0_5_md.csv")
 
 ### TO DO - write sketch umap coords
 
