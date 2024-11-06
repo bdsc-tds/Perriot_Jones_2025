@@ -4,6 +4,7 @@ library("ggplot2")
 library("khroma") 
 library("patchwork")
 library("scales")
+library("Seurat")
 library("tidyverse")
 library("viridis")
 
@@ -24,49 +25,37 @@ source(file.path(project_dir, "scripts/clones_of_interest.R"))
 # Names of graphs to use in FindSubCluster names(seurat_rpca@graphs)
 # FindSubCluster using sketch_snn or sketch_nn doesn't assign clusters to all
 
-cl2_subs <- subset(seurat_rpca, cells = which(seurat_rpca$seurat_clusters == "2"))
-cl2_subs <- FindVariableFeatures(cl2_subs)
-cl2_subs <- ScaleData(cl2_subs, features = rownames(cl2_subs))
-cl2_subs <- RunPCA(cl2_subs)
+cl2_subs <- subset(seurat_rpca,
+                   cells = which(seurat_rpca$seurat_clusters == "2"))
 
 DefaultAssay(cl2_subs) <- "RNA"
+cl2_subs[["RNA"]] <- JoinLayers(cl2_subs[["RNA"]])
 
-cl2_subs <- IntegrateLayers(
-    object = cl2_subs,
-    method = RPCAIntegration,
-    orig.reduction = "pca",
-    new.reduction = "integrated.rpca.c2",
-    verbose = FALSE
-)
+cl2 <- CreateSeuratObject(GetAssayData(cl2_subs, "RNA"),
+                          meta.data = cl2_subs[[]])
 
-cl2_subs <- FindNeighbors(cl2_subs,
-                          reduction = "integrated.rpca.c2",
-                          dims = 1:30)
-cl2_subs <- FindClusters(cl2_subs,
-                         #resolution = 2,
-                         cluster.name = "subcluster")
+cl2[["RNA"]] <- split(cl2[["RNA"]], f = cl2$Sample)
+cl2 <- NormalizeData(cl2)
+cl2 <- FindVariableFeatures(cl2)
+cl2 <- ScaleData(cl2)
+cl2 <- RunPCA(cl2)
 
+# Integrate with RPCA ----
+cl2 <- IntegrateLayers(cl2,
+                       method = RPCAIntegration,
+                       orig = "pca",
+                       new.reduction = "integrated.rpca",
+                       dims = 1:30,
+                       k.anchor = 20)
 
+cl2 <- FindNeighbors(cl2,
+                     reduction = "integrated.rpca",
+                     dims = 1:30)
+cl2 <- FindClusters(cl2,
+                    cluster.name = "subcluster")
+cl2 <- RunUMAP(cl2,
+               reduction = "integrated.rpca",
+               dims = 1:30)
 
-
-cl2 <- FindSubCluster(
-    seurat_rpca,
-    cluster = "2",
-    graph.name = "sketch_nn",
-    subcluster.name = "sub.cluster",
-    resolution = 0.5,
-    algorithm = 1
-)
-
-cl2_subs <- subset(cl2, cells = which(seurat_rpca$seurat_clusters == "2"))
-
-DefaultAssay(cl2) <- "RNA"
-
-#cl2 <- FindVariableFeatures(cl2)
-#cl2 <- ScaleData(cl2)
-#cl2 <- RunPCA(cl2)
-cl2 <- RunUMAP(cl2, reduction = "integrated.rpca.full",dims = 1:30)
-cl2 <- FindNeighbors(cl2, dims = 1:30,
-                     reduction = "integrated.rpca.full",)
-cl2 <- FindClusters(cl2)
-
+write_rds(cl2, file = file.path(project_dir,
+                                "data/processed/cl2_subclusters.rds"))
