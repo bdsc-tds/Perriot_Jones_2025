@@ -24,17 +24,20 @@ marker_set_2 <- c("ANXA1", "KIR3DL1", "IL7R", "KLRG1", "TOX", "KLRB1", "CD74",
                  "IFNGR1", "KLRF1", "EOMES", "PDCD1", "SLAMF6", "GZMB", "GZMH",
                  "GZMK", "TCF7", "XCL1")
 
-seurat_rpca <- read_rds(file.path(scratch_dir, "integrated_sketch_rpca.rds"))
+seurat_rpca <- read_rds(file.path(scratch_dir,
+                                  "integrated_sketch_rpca_res_0_5.rds"))
 
 # UMAP on sketched data ----
 # UMAP on the integrated, sketched cells
-pdf(file.path(fig_dir, "umap_sketch_rpca.pdf"))
+DefaultAssay(seurat_rpca) <- "sketch"
+
+pdf(file.path(fig_dir, "umap/sketch_rpca_res_0_5.pdf"))
 DimPlot(seurat_rpca,
         group.by = "Sample",
         reduction = "umap")
 dev.off()
 
-pdf(file.path(fig_dir, "umap_sketch_rpca_cluster_by_sample.pdf"),
+pdf(file.path(fig_dir, "umap/sketch_rpca_res_0_5_cl_by_sample.pdf"),
     height = 12, width = 9)
 DimPlot(seurat_rpca,
         group.by = "seurat_clusters",
@@ -44,16 +47,17 @@ DimPlot(seurat_rpca,
 dev.off()
 
 
-
 # UMAP of integrated data, all samples ----
-pdf(file.path(fig_dir, "umap_sketch_rpca_full.pdf"))
+DefaultAssay(seurat_rpca) <- "RNA"
+
+pdf(file.path(fig_dir, "umap/sketch_rpca_res_0_5_full.pdf"))
 DimPlot(seurat_rpca,
         reduction = "umap.full", 
         group.by = "Sample")
 dev.off()
 
 
-pdf(file.path(fig_dir, "umap_sketch_rpca_full_cluster_by_sample.pdf"),
+pdf(file.path(fig_dir, "umap/sketch_rpca_res_0_5_full_cl_by_sample.pdf"),
     height = 12, width = 9)
 DimPlot(seurat_rpca,
         group.by = "seurat_clusters",

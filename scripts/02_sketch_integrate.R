@@ -222,7 +222,7 @@ write_rds(seurat_rpca,
           "integrated_sketch_rpca_res_0_5.rds")
 
 
-# Add UMAP coordinates and clone of interest to metadata ----
+# Add UMAP coordinates and clone of interest to metadata and save ----
 
 um <- Embeddings(seurat_rpca[["umap.full"]])
 identical(rownames(um), rownames(seurat_rpca[[]]))
@@ -237,14 +237,16 @@ seurat_rpca[[]] <- seurat_rpca[[]] %>%
 coi_cells <- subset(seurat_rpca,
                     cells = which(! seurat_rpca$coi == "no"))
 
+seurat_rpca <- FindNeighbors(seurat_rpca, return.neighbor = TRUE)
+
 nbr <- seurat_rpca[["sketch.nn"]]
+
+# Check that all cells with clone of interest are in the sketch 
 table(Cells(coi_cells) %in% Cells(nbr))
 
-# These are the neighbours within the sketch
-nbr <- FindNeighbors(seurat_rpca, return.neighbor = TRUE)
+# Note - this gets the neighbours within the sketch
 
-
-n_nbrs <- 5
+n_nbrs <- 10
 
 coi_nbrs <- lapply(Cells(coi_cells), function(cell){ 
     TopNeighbors(nbr, cell, n = n_nbrs)
@@ -252,17 +254,20 @@ coi_nbrs <- lapply(Cells(coi_cells), function(cell){
 
 coi_nbrs <- tibble(cell = rep(Cells(coi_cells), each = n_nbrs),
                    neighbour = unlist(coi_nbrs),
-                   nbr_coi = neighbour %in% Cells(coi_cells))
+                   nbr_coi = neighbour %in% Cells(coi_cells)) %>%
+    dplyr::mutate(beta_aa = seurat_rpca[[]][cell, "beta_aa"],
+                  nbr_beta_aa = seurat_rpca[[]][neighbour, "beta_aa"])
 
-coi_nbr_obj <- subset(seurat_rpca,
-                   cells = coi_nbrs$neighbour)
+write_csv(coi_nbrs,
+          file = file.path(project_dir, "results/coi_10_neighbours.csv"))
 
+# Add column to metadata indicating if a cell is a coi neighbour
+# (without specifying which cell)
 
+seurat_rpca$coi_nbr <- rownames(seurat_rpca[[]]) %in% coi_nbrs$neighbour 
 
 write_csv(seurat_rpca[[]],
           "integrated_sketch_rpca_res_0_5_md.csv")
-
-### TO DO - write sketch umap coords
 
 # ---------------
 meta <- seurat_rpca[[]] 
