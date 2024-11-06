@@ -24,21 +24,23 @@ source(file.path(project_dir, "scripts/clones_of_interest.R"))
 # Names of graphs to use in FindSubCluster names(seurat_rpca@graphs)
 # FindSubCluster using sketch_snn or sketch_nn doesn't assign clusters to all
 
-cl2_subs <- subset(cl2, cells = which(seurat_rpca$seurat_clusters == "2"))
+cl2_subs <- subset(seurat_rpca, cells = which(seurat_rpca$seurat_clusters == "2"))
 cl2_subs <- FindVariableFeatures(cl2_subs)
-cl2_subs <- ScaleData(cl2_subs)
+cl2_subs <- ScaleData(cl2_subs, features = rownames(cl2_subs))
 cl2_subs <- RunPCA(cl2_subs)
+
+DefaultAssay(cl2_subs) <- "RNA"
 
 cl2_subs <- IntegrateLayers(
     object = cl2_subs,
     method = RPCAIntegration,
     orig.reduction = "pca",
-    new.reduction = "integrated.rpca",
+    new.reduction = "integrated.rpca.c2",
     verbose = FALSE
 )
 
 cl2_subs <- FindNeighbors(cl2_subs,
-                          reduction = "integrated.rpca",
+                          reduction = "integrated.rpca.c2",
                           dims = 1:30)
 cl2_subs <- FindClusters(cl2_subs,
                          #resolution = 2,

@@ -261,6 +261,13 @@ coi_nbrs <- tibble(cell = rep(Cells(coi_cells), each = n_nbrs),
 write_csv(coi_nbrs,
           file = file.path(project_dir, "results/coi_10_neighbours.csv"))
 
+coi_nbrs %>%
+    dplyr::group_by(beta_aa, nbr_beta_aa) %>%
+    dplyr::summarise(n = n()) %>%
+    dplyr::arrange(beta_aa, desc(n)) %>%
+    write_csv(file = file.path(project_dir, "results/coi_10_nbr_counts.csv"))
+
+
 # Add column to metadata indicating if a cell is a coi neighbour
 # (without specifying which cell)
 
