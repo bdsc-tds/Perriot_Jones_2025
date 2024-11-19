@@ -46,7 +46,7 @@ cl2 <- CreateSeuratObject(GetAssayData(cl2_subs, "RNA"),
 cl2[["RNA"]] <- split(cl2[["RNA"]], f = cl2$Sample)
 cl2 <- NormalizeData(cl2)
 cl2 <- FindVariableFeatures(cl2)
-cl2 <- ScaleData(cl2)
+cl2 <- ScaleData(cl2, features = Features(cl2))
 cl2 <- RunPCA(cl2)
 
 # Integrate with RPCA ----
@@ -132,6 +132,12 @@ temp <- cl2[[]] %>%
                               TRUE ~ FALSE))
 cl2_top_clones <- subset(cl2, cells = Cells(cl2)[temp$top_clone])
 
+# Write table of top clones
+cl2_top_clones[[]] %>%
+    dplyr::group_by(Sample, beta_aa) %>%
+    dplyr::summarise(n_cells = n()) %>%
+    readr::write_csv(file = file.path(fig_dir, "cluster_2_top_clones.csv"))
+
 # Aggregate across sample and clone
 # Note that Seurat appears to use "average" by default -
 # AggregateExpression wraps PseudobulkExpression which has default method
@@ -140,6 +146,11 @@ pseudo_cl2 <- AggregateExpression(cl2_top_clones,
                                   assays = "RNA",
                                   return.seurat = TRUE,
                                   group.by = c("Sample", "beta_aa"))
+
+write_rds(pseudo_cl2, file = file.path(project_dir,
+                                "data/processed/cl2_pseudobulk.rds"))
+
+
 
 anno <- pseudo_cl2[[]][, c("Sample", "beta_aa")]
 mtx <- GetAssayData(pseudo_cl2)[marker_set_2, ]
@@ -178,6 +189,17 @@ coi_v_other_cl2_ri_samples <- FindAllMarkers(object = cl2_ri01_02) %>%
 readr::write_csv(coi_v_other_cl2_ri_samples,
                  file = file.path(fig_dir, "de_coi_v_other_cl2_ri01_dis_ri02.csv"))
 
+# Differential expression between Ri and Healthy samples ----
+
+cl2$Condition <- gsub("[0-9]+(_dis|_5m)?$", "", cl2$Sample)
+Idents(cl2) <- cl2$Condition
+
+ri_v_healthy <- FindAllMarkers(object = cl2) %>%
+    dplyr::filter(p_val_adj <= 0.05, cluster == "Ri") %>%
+    dplyr::select(-cluster) %>%
+    dplyr::relocate(gene) %>%
+    write_csv(file = file.path(fig_dir, "de_Ri_v_healthy_cl_2.csv"))
+
 # Heatmap of significant genes, grouped by clone ----
 
 # TCR by cell and sample
@@ -210,22 +232,19 @@ DoHeatmap(cl2_ri01_02_top_clones,
 dev.off()
 
 
-
-
-
-# Replicate heatmap
-scale_data <- GetAssayData(cl2_ri01_02_top_clones, layer = "scale.data")
-colnames(scale_data) <- NULL
-
-column_ha = HeatmapAnnotation(clone = cl2_ri01_02_top_clones$beta_aa)
-dend1 = cluster_between_groups(scale_data, cl2_ri01_02_top_clones$beta_aa)
-
-Heatmap(scale_data,
-        cluster_columns = dend1,
-        show_row_dend = FALSE,
-        show_column_dend = FALSE,
-        row_names_gp = gpar(fontsize = 8),
-        top_annotation = column_ha)
+# # Replicate heatmap
+# scale_data <- GetAssayData(cl2_ri01_02_top_clones, layer = "scale.data")
+# colnames(scale_data) <- NULL
+# 
+# column_ha = HeatmapAnnotation(clone = cl2_ri01_02_top_clones$beta_aa)
+# dend1 = cluster_between_groups(scale_data, cl2_ri01_02_top_clones$beta_aa)
+# 
+# Heatmap(scale_data,
+#         cluster_columns = dend1,
+#         show_row_dend = FALSE,
+#         show_column_dend = FALSE,
+#         row_names_gp = gpar(fontsize = 8),
+#         top_annotation = column_ha)
 
 # By clone of interest by cell and sample
 Idents(cl2_ri01_02) <- cl2_ri01_02$coi
@@ -471,4 +490,46 @@ ggplot(pca_coords,
                     nudge_y = .25) +
     # Get rid of an outlier for better viewing
     coord_cartesian(ylim = c(-2.5, 2.5))
+dev.off()
+
+
+# Heatmap all donors, top clones ----
+
+# (note that Seurat DoHeatmap doesn't cluster rows or columns)
+
+agg_dat <- GetAssayData(pseudo_cl2,
+                        layer = "scale.data")[coi_v_other_cl2_ri_samples$gene, ]
+
+raw_dat <- GetAssayData(pseudo_cl2,
+                        layer = "data")[coi_v_other_cl2_ri_samples$gene, ]
+
+pseudo_cl2[[]] <- pseudo_cl2[[]] %>%
+    dplyr::mutate(coi = case_when(beta_aa == gsub("_", "-", ri01_coi) ~ "Ri01",
+                  beta_aa == gsub("_", "-", ri02_coi) ~ "Ri02",
+                  TRUE ~ "no"))
+
+column_ha = HeatmapAnnotation(Clone = pseudo_cl2$coi,
+                              Sample = pseudo_cl2$Sample)
+
+pdf(file.path(fig_dir, "heatmap_cl2_clones_scale_data.pdf"),
+    width = 12, height = 10)
+Heatmap(agg_dat,
+        top_annotation = column_ha,
+        row_names_gp = gpar(fontsize = 6),
+        column_names_gp = gpar(fontsize = 4),
+        show_row_dend = FALSE)#,
+        #col = PurpleAndYellow()) # purple and yellow looks mostly purple
+
+dev.off()
+
+
+pdf(file.path(fig_dir, "heatmap_cl2_clones_log_count_data.pdf"),
+    width = 12, height = 10)
+Heatmap(raw_dat,
+        top_annotation = column_ha,
+        row_names_gp = gpar(fontsize = 6),
+        column_names_gp = gpar(fontsize = 4),
+        show_row_dend = FALSE)#,
+#col = PurpleAndYellow()) # purple and yellow looks mostly purple
+
 dev.off()
