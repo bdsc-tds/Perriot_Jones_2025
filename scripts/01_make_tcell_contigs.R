@@ -5,7 +5,7 @@ vdj_dir <- "data/raw/VDJ"
 contig_annots <- list.files(vdj_dir,
                             recursive = TRUE,
                             full.names = TRUE,
-                            pattern = "all_contig_annotations.csv")
+                            pattern = "filtered_contig_annotations.csv") #"all_contig_annotations.csv")
 names(contig_annots) <- basename(dirname(contig_annots))
 
 samples <- read_delim("data/cellbender_input.txt", col_names = FALSE)[[1]]

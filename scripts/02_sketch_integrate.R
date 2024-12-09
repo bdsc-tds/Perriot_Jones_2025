@@ -20,13 +20,10 @@ cluster_res <- 0.5
 # Check for directory environment variables 
 project_dir <- tryCatch({Sys.getenv()[["project_dir"]]},
                         error = function(cond){return(".")})
-scratch_dir <- tryCatch({Sys.getenv()[["scratch_dir"]]},
-                        error = function(cond){return(".")})
 data_dir <- file.path(project_dir, "data")
 de_results <- file.path(project_dir, "results/differential_expression")
 fig_dir <- file.path(project_dir, "figures")
 log_dir <- file.path(project_dir, "logs")
-
 
 # Select the samples to use
 samples <- read_delim(file.path(data_dir, "cellbender_input.txt"),
@@ -65,12 +62,12 @@ h5_to_seurat <- function(nm, exp_dir, min_cells, min_features){
                                      meta.data = samples)
 }    
 
-# Filter for expression of CD8A or B or presence of TCR in metadata CTgene
+# Filter for expression of CD8A or B and presence of TCR in metadata CTgene
 filter_CD8 <- function(seurat_obj){
     cd8_expr <- subset(seurat_obj, features = c("CD8A", "CD8B"))
     cd8_expressed <- colSums(cd8_expr@assays$RNA$counts) > 0
     has_tcr <- ! is.na(seurat_obj@meta.data$CTgene)
-    keep <- cd8_expressed | has_tcr
+    keep <- cd8_expressed & has_tcr
     seurat_obj <- subset(seurat_obj, cells = which(keep))
 }
 
