@@ -17,7 +17,6 @@ library("viridis")
 set.seed(511697)
 ndim <- 15
 p_cutoff <- 0.05 
-tcr_col <- "beta_aa"
 
 data_dir <- "data"
 

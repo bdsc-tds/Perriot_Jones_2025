@@ -49,36 +49,6 @@ readr::write_rds(combined_tcr,
 # Plots of clone abundance ----
 ri_samples <- grepl("^Ri", names(combined_tcr))
 ri_nms <- names(combined_tcr)[ri_samples]
-    
-# Relative proportions of top Ri clones ----
-#
-#pdf("figures/scRepertoire/ri_top_10_clone_ppns.pdf", width = 10)
-#p <- clonalCompare(combined_tcr, 
-#              top.clones = 10, 
-#              samples = ri_nms, 
-#              cloneCall="aa", 
-#              graph="alluvial") +
-#    guides(fill=guide_legend(ncol = 1)) +
-#    theme(axis.text = element_text(size = 14),
-#          axis.title = element_text(size = 16),
-#          legend.text=element_text(size = 10))
-#print(p)
-#dev.off()
-
-# Scatter of proportions in Ri samples ----
-#pdf(sprintf("figures/scRepertoire/clone_ppns_%s_%s.pdf", ri_nms[1], ri_nms[2]), width = 10)
-#p <- clonalScatter(combined_tcr, 
-#              cloneCall = "strict", 
-#              x.axis = ri_nms[1],
-#              y.axis = ri_nms[2],
-#              dot.size = "total",
-#              graph = "proportion") +
-#    theme(axis.text = element_text(size = 14),
-#          axis.title = element_text(size = 20),
-#          axis.title.x = element_text(margin = margin(t = 10)),
-#          axis.title.y = element_text(margin = margin(r = 10)))
-#print(p)
-#dev.off()
 
 # Clonal homeostasis ----
 
