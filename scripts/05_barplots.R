@@ -18,6 +18,22 @@ parser$add_argument('--figures',  '-f',
 # ----------------------------------------------------------------------------
 # Functions ----
 
+# Proportion of cells from each cluster per donor ----
+cells_per_donor <- function(md, fig_dir){
+    pdf(file.path(fig_dir, "sample_by_cluster.pdf"), width = 9)
+    p <- ggplot(md, aes(x = Sample, fill = seurat_clusters)) +
+        geom_bar(position = "fill", color = "black") +
+        scale_y_continuous(expand = expansion(c(0,0))) +
+        scale_x_discrete(expand = expansion(c(0,0))) +
+        coord_flip() + 
+        scale_fill_manual(values = default_subs[levels(df$Cluster)],
+                          labels = names(default_subs[levels(df$Cluster)])) +
+        theme_bw() + 
+        labs(x = NULL, y = "Proportion of cells")
+    print(p)
+    dev.off()
+}
+
 # Bar cluster per sample vertical ----
 ppn_by_sample_vertical <- function(cl_pct, fig_dir){
     pdf(file.path(fig_dir, "bar_sample_pct_per_cl_vertical.pdf"),
@@ -126,6 +142,7 @@ make_plots <- function(args){
     cl_pct <- get_cluster_percent(md)
     ppn_by_sample_vertical(cl_pct, fig_dir)
     ppn_by_sample(cl_pct, fig_dir)
+    cells_per_donor(md, fig_dir)
 }
 
 # ----------------------------------------------------------------------------

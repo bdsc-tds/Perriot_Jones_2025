@@ -3,7 +3,7 @@
 library("argparse")
 library("tidyverse")
 
-parser <- ArgumentParser(description = "Differential expression analyses")
+parser <- ArgumentParser(description = "Tables for clone of interest")
 parser$add_argument('--input', '-i',
                     help = 'Metadata from seurat object')
 parser$add_argument('--output',  '-f', 
@@ -102,12 +102,13 @@ count_coi <- function(md, out_dir){
 
 make_tables <- function(args){
     md <- read_csv(args$input)
-    if (! dir.exists(args$outpput)) { dir.create(args.output) }
+    if (! dir.exists(args$output)) { dir.create(args.output) }
     count_coi(md, args$out)
     top_clones(md, out_dir)
     clones_in_coi(md, out_dir)
     
 } 
+
 # ----------------------------------------------------------------------------
 make_tables(args)
     

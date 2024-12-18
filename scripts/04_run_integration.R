@@ -30,17 +30,19 @@ args <- parser$parse_args()
 make_umaps <- function(seurat_obj, fig_dir){
     
     pdf(file.path(fig_dir, "umap_rpca.pdf"), width = 12, height = 12)
-    DimPlot(seurat_obj,
+    p <- DimPlot(seurat_obj,
             reduction = "umap.full",
             group.by = "Sample")
+    print(p)
     dev.off()
     
     pdf(file.path(fig_dir, "umap_rpca_by_sample.pdf"), width = 12, height = 12)
-    DimPlot(seurat_obj,
+    p <- DimPlot(seurat_obj,
             reduction = "umap.full",
             group.by = "Sample",
             split.by = "Sample",
             ncol = 4)
+    print(p)
     dev.off()
 }
     

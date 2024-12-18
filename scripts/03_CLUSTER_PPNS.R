@@ -29,25 +29,6 @@ args <- parser$parse_args()
 # ----------------------------------------------------------------------------
 # Functions ----
 
-# Proportion of cells from each cluster per donor ----
-cells_per_donor <- function(seurat_obj, fig_dir){
-    seurat_obj$seurat_clusters <-
-        as.factor(as.numeric(seurat_obj$seurat_clusters))
-    Idents(seurat_obj) <- seurat_obj$seurat_clusters
-    
-    # IS DF METADATA?
-    pdf(file.path(fig_dir, "sample_by_cluster.pdf"), width = 9)
-    ggplot(df, aes(x = Sample, fill = Cluster)) +
-        geom_bar(position = "fill", color = "black") +
-        scale_y_continuous(expand = expansion(c(0,0))) +
-        scale_x_discrete(expand = expansion(c(0,0))) +
-        coord_flip() + 
-        scale_fill_manual(values = default_subs[levels(df$Cluster)],
-                          labels = names(default_subs[levels(df$Cluster)])) +
-        theme_bw() + 
-        labs(x = NULL, y = "Proportion of cells")
-    dev.off()
-}
 
 # run_de ----
 run_de <- function(args){

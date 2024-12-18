@@ -97,7 +97,7 @@ cd8_expr <- function(seurat_obj){
 }
 
 # add_tcr_metadata ----
-add_tcr_metadata <- function(seurat_obj, combined_tcr){
+add_tcr_metadata <- function(seurat_obj, combined_tcr, vj_aa = TRUE){
     # Add TCR information 
     seurat_obj <- combineExpression(combined_tcr, seurat_obj)
     
@@ -105,7 +105,7 @@ add_tcr_metadata <- function(seurat_obj, combined_tcr){
     seurat_obj[[]] <- beta_aa(seurat_obj[[]])
     
     # Add vj_aa
-    seurat_obj[[]] <- vj_aa(seurat_obj[[]])
+    if (isTRUE(vj_aa)){ seurat_obj[[]] <- vj_aa(seurat_obj[[]]) }
     
     # Add disease to metadata 
     seurat_obj$condition <- gsub("[0-9]+$", "", seurat_obj$Sample)
@@ -222,14 +222,16 @@ make_seurat <- function(args){
                          cells = Cells(seurat_obj)[seurat_obj$nCount_RNA >=
                                                        args$min_rna])
     
+    # Classify cells by tcr presence
+    seurat_obj[[]] <- tcr_presence(seurat_obj[[]])
+    
+    # TO DO FILTER TCR PRESENCE
+    
     # Add TCR information
-    seurat_obj <- add_tcr_metadata(seurat_obj, combined_tcr)
+    seurat_obj <- add_tcr_metadata(seurat_obj, combined_tcr, vj_aa=FALSE)
     
     # Add CD8 expression status to metadata
     seurat_obj$CD8 <- cd8_expr(seurat_obj)
-    
-    # Classify cells by tcr presence
-    seurat_obj[[]] <- tcr_presence(seurat_obj[[]])
     
     # Save seurat object and metadata
     write_rds(seurat_obj, args$output)

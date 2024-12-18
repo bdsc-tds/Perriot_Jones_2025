@@ -21,10 +21,10 @@ args <- parser$parse_args()
 # Functions ----
 
 # TO DO - make this work with filter_seurat 
-filter_maxgenes <- function(seurat_obj, max_features){
-    seurat_obj <- subset(seurat_obj, subset = nFeature_RNA < max_features)
-    seurat_obj
-}
+#filter_maxgenes <- function(seurat_obj, max_features){
+#    seurat_obj <- subset(seurat_obj, subset = nFeature_RNA < max_features)
+#    seurat_obj
+#}
 
 # Filtering by TCR beta presence ----
 filter_beta <- function(seurat_obj){
