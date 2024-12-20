@@ -4,22 +4,22 @@ library("argparse")
 library("tidyverse")
 
 parser <- ArgumentParser(description = "Tables for clone of interest")
-parser$add_argument('--input', '-i',
+parser$add_argument('--metadata', '-m',
                     help = 'Metadata from seurat object')
-parser$add_argument('--output',  '-f', 
+parser$add_argument('--output',  '-o', 
                     help = 'Directory for saving tables')
+parser$add_argument('--clones',  '-c', 
+                    help = 'R script containing sequences of interest')
+
 args <- parser$parse_args()
 
-
-source(file.path(project_dir, "scripts/clones_of_interest.R"))
 # ----------------------------------------------------------------------------
 # Clone composition of clusters containing clones of interest ----
-
 clones_in_coi <- function(meta, out_dir){
     # Select clusters with at least 5 clones of interest,
     # regardless of sample and sequence
     clusters_w_roi = meta %>%
-        dplyr::filter(! coi == "no") %>%
+        dplyr::filter(coi == TRUE) %>%
         dplyr::group_by(seurat_clusters) %>%
         dplyr::summarise(n = n()) %>%
         dplyr::filter(n >= 5) %>%
@@ -78,35 +78,42 @@ top_clones <- function(meta, out_dir){
                         n_cluster, pct_cluster)
     
     write_csv(all_clones,
-              file.path(out_dir, "counts_all_clones_by_sample_cluster.csv"))
+              file.path(out_dir, "all_clones_counts_by_sample_cluster.csv"))
     
     # Filter for clones that account for at least 1% of the sample
     top_clones <- all_clones %>%
         dplyr::filter(pct_sample >= 1) %>%
         write_csv(file.path(out_dir,
-                            "counts_filtered_clones_by_sample_cluster.csv"))
+                            "top_clones_counts_by_sample_cluster.csv"))
     
 }
 
 
+# Count clone of interest ----
 count_coi <- function(md, out_dir){
     # Counts of clone of interest per sample
     md %>%
-        dplyr::filter(beta_aa %in% c(ri01_coi, ri02_coi)) %>%
+        dplyr::filter(coi == TRUE) %>%
         dplyr::select(Sample, seurat_clusters, beta_aa) %>%
         dplyr::group_by(across(everything())) %>%
         dplyr::summarise(n = n()) %>%
         dplyr::arrange(desc(n)) %>%
-        write_csv(file.path(out_dir, "clone_of_interest.csv"))
+        write_csv(file.path(out_dir, "clone_of_interest_counts.csv"))
 }
 
+# make_tables ----
 make_tables <- function(args){
-    md <- read_csv(args$input)
-    if (! dir.exists(args$output)) { dir.create(args.output) }
-    count_coi(md, args$out)
-    top_clones(md, out_dir)
-    clones_in_coi(md, out_dir)
+    if (! dir.exists(args$output)) { dir.create(args$output) }
     
+    source(args$clone)
+    coi <- get_coi()
+    
+    md <- read_csv(args$metadata) %>%
+        dplyr::mutate(coi = beta_aa %in% coi)
+    
+    count_coi(md, args$output)
+    top_clones(md, args$output)
+    clones_in_coi(md, args$output)
 } 
 
 # ----------------------------------------------------------------------------

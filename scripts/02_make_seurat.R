@@ -71,22 +71,28 @@ vj_aa <- function(md){
 tcr_presence <- function(md){
     md %>%
         dplyr::mutate(
-            two_alphas = grepl(";", CTaa1),
-            two_betas = grepl(";", CTaa2),
-            two_chains = two_alphas & two_betas,
+            n_alphas = case_when(is.na(CTaa1) ~ NA,
+                                 TRUE ~ stringr::str_count(CTaa1, ";") + 1),
+            n_betas = case_when(is.na(CTaa2) ~ NA,
+                                TRUE ~ stringr::str_count(CTaa2, ";") + 1),
             tcr_presence = 
-                case_when(is.na(CTaa1) & is.na(CTaa2) ~ "no_alpha_no_beta",
-                          two_chains ~ "two_chains",
-                          two_betas & is.na(CTaa1) ~ "two_betas_no_alpha",
-                          two_betas & !is.na(CTaa1) ~ "two_betas_one_alpha",
-                          two_alphas & is.na(CTaa2) ~ "two_alphas_no_beta",
-                          two_alphas & !is.na(CTaa2) ~ "two_alphas_one_beta",
-                          is.na(CTaa1) ~ "no_alpha",
-                          is.na(CTaa2) ~ "no_beta",
-                          ! is.na(CTaa1) & ! is.na(CTaa2) ~ "alpha_beta",
-                          TRUE ~ "unknown")) %>%
-        dplyr::select(-two_alphas, -two_betas) %>%
+                case_when(is.na(CTaa1) & is.na(CTaa2) ~ "no_tcr",
+                          n_alphas == 2 & n_betas == 2 ~ "two_chains",
+                          n_betas == 2 & is.na(CTaa1) ~ "two_betas_no_alpha",
+                          n_betas == 2 & n_alphas == 1 ~ "two_betas_one_alpha",
+                          n_alphas == 2 & is.na(CTaa2) ~ "two_alphas_no_beta",
+                          n_alphas == 2 & n_betas == 1 ~ "two_alphas_one_beta",
+                          n_betas == 1 & is.na(CTaa1) ~ "no_alpha_one_beta",
+                          n_alphas == 1 & is.na(CTaa2) ~ "one_alpha_no_beta",
+                          n_alphas == 1 & n_betas == 1 ~ "alpha_beta",
+                          TRUE ~ "other")) %>%
         return()
+}
+
+remove_tcr_doublets <- function(seurat_obj){
+    seurat_obj <- subset(seurat_obj,
+           cells = Cells(seurat_obj)[! seurat_obj$tcr_presence == "other"])
+    return(seurat_obj)
 }
 
 # CD8 expression ----
@@ -97,15 +103,12 @@ cd8_expr <- function(seurat_obj){
 }
 
 # add_tcr_metadata ----
-add_tcr_metadata <- function(seurat_obj, combined_tcr, vj_aa = TRUE){
+add_tcr_metadata <- function(seurat_obj, combined_tcr){
     # Add TCR information 
     seurat_obj <- combineExpression(combined_tcr, seurat_obj)
     
     # Add beta chain cdr3
     seurat_obj[[]] <- beta_aa(seurat_obj[[]])
-    
-    # Add vj_aa
-    if (isTRUE(vj_aa)){ seurat_obj[[]] <- vj_aa(seurat_obj[[]]) }
     
     # Add disease to metadata 
     seurat_obj$condition <- gsub("[0-9]+$", "", seurat_obj$Sample)
@@ -222,13 +225,17 @@ make_seurat <- function(args){
                          cells = Cells(seurat_obj)[seurat_obj$nCount_RNA >=
                                                        args$min_rna])
     
+    # Add TCR information
+    seurat_obj <- add_tcr_metadata(seurat_obj, combined_tcr)
+    
     # Classify cells by tcr presence
     seurat_obj[[]] <- tcr_presence(seurat_obj[[]])
     
-    # TO DO FILTER TCR PRESENCE
+    # Remove cells with impossible alpha beta combinations (errors or doublets)
+    seurat_obj <- remove_tcr_doublets(seurat_obj)
     
-    # Add TCR information
-    seurat_obj <- add_tcr_metadata(seurat_obj, combined_tcr, vj_aa=FALSE)
+    # Add vj_aa, note this will fail if either alpha or beta > 2
+    seurat_obj[[]] <- vj_aa(seurat_obj[[]]) 
     
     # Add CD8 expression status to metadata
     seurat_obj$CD8 <- cd8_expr(seurat_obj)

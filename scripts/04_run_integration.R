@@ -134,6 +134,7 @@ get_integration_method <- function(name){
 run_integration <- function(args){
     # Create directories if they don't exist
     fig_dir <- file.path(args$figures, args$integration)
+    if (! file.exists(args$figures)){ dir.create(args$figures) }
     if (! file.exists(fig_dir)){ dir.create(fig_dir) }
     if (! file.exists(args$output)){ dir.create(args$output) }
     

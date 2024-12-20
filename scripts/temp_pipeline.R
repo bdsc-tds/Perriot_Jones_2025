@@ -37,7 +37,8 @@ args <- list(metadata = file.path(cd8_and_tcr_data, "integrated_seurat.csv.gz"),
 
 #05_tables.R
 args <- list(metadata = file.path(cd8_and_tcr_data, "integrated_seurat.csv.gz"),
-             output = file.path(cd8_and_tcr_res, "tables"))
+             output = file.path(cd8_and_tcr_res, "clone_tables"),
+             clones = file.path(workdir, "scripts/clones_of_interest.R"))
 
 #06_seurat_plots.R
 args <- list(metadata = file.path(cd8_and_tcr_data, "integrated_seurat.rds"),

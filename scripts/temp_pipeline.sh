@@ -34,10 +34,20 @@ Rscript ${SCRIPTS}04_run_integration.R \
 --figures ${RESULTS} \
 --integration ${INTEGRATION_METHOD}
 
-# # Cluster barplots
-# Rscript ${SCRIPTS}07_cluster_barplots.R \
-# --metadata ${FILTER_DATA_OUT}integrated_seurat.csv.gz \
-# --figures ${RESULTS}
+# Cluster barplots
+Rscript ${SCRIPTS}05_barplots.R \
+--metadata ${FILTER_DATA_OUT}integrated_seurat.csv.gz \
+--figures ${RESULTS}cluster_barplots 
+
+# Clone tables
+Rscript ${SCRIPTS}05_tables.R \
+--metadata ${FILTER_DATA_OUT}integrated_seurat.csv.gz \
+--figures ${RESULTS}clone_tables \
+--clones = ${WORKDIR}scripts/clones_of_interest.R"))
+
+
+
+
 # 
 # # Custom UMAPs
 # Rscript ${SCRIPTS}08_custom_umaps.R \

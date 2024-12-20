@@ -12,7 +12,7 @@ parser$add_argument('--filter', '-f', help = 'Name of filter function')
 parser$add_argument('--seurat', '-s',
                     help = 'seurat object, saved as .rds')
 parser$add_argument('--output', '-o', help = 'Directory to save output')
-parser$add_argument('--max-features', '-f', dest = "max_features", 
+parser$add_argument('--max-features', '-m', dest = "max_features", 
                     help = 'Maximum number of genes expressed per cell',
                     default = 6000)
 args <- parser$parse_args()
@@ -51,7 +51,7 @@ cd8_and_tcr <- function(seurat_obj){
 }
 
 filter_seurat <- function(args){
-    if (! file.exists(args$output)){ dir.create(args$output) }
+    if (! dir.exists(args$output)){ dir.create(args$output) }
     
     seurat_obj <- read_rds(args$seurat)   
     seurat_obj <- getFunction(args$filter)(seurat_obj)
