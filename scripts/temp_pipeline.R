@@ -44,8 +44,14 @@ args <- list(metadata = file.path(cd8_and_tcr_data, "integrated_seurat.csv.gz"),
 args <- list(metadata = file.path(cd8_and_tcr_data, "integrated_seurat.rds"),
              figures = cd8_and_tcr_res) # FIGURES HERE IS BASEDIR
 
+# 07_custom_umaps.R
+args <- list(metadata = "data/processed/cd8_and_tcr/integrated_seurat.csv.gz", 
+     figures = "results/cd8_and_tcr", output = "results/cd8_and_tcr//clone_of_interest", 
+     clone = "scripts/clones_of_interest.R")
 
 
+# 08_clones_of_interest.R 
+# "figures/subcluster_coi/"
 
 ##08_custom_umaps.R
 #args <- list(metadata = file.path(cd8_and_tcr_data, "integrated_seurat.csv.gz"),

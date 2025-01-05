@@ -12,12 +12,19 @@ library("Seurat")
 library("tidyverse")
 library("viridis")
 
-# PROJECT DIR
+# Depends on 08_clones_of_interest
 
-fig_dir <- file.path(project_dir, "figures/subcluster_coi/")
+parser <- ArgumentParser(description = "Tables for clone of interest")
+parser$add_argument('--metadata', '-m',
+                    help = 'Metadata from seurat object')
+parser$add_argument('--figures',  '-o', 
+                    help = 'Directory for saving figres')
+parser$add_argument('--clones',  '-c', 
+                    help = 'R script containing sequences of interest')
 
-# Clones of interest
-source(file.path(project_dir, "scripts/clones_of_interest.R"))
+args <- parser$parse_args()
+
+
 
 # Cluster 2 pseudobulked top clones 
 pseudo_cl2 <- read_rds(file = file.path(project_dir,

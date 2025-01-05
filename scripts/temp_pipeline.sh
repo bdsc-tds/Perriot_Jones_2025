@@ -43,18 +43,21 @@ Rscript ${SCRIPTS}05_barplots.R \
 Rscript ${SCRIPTS}05_tables.R \
 --metadata ${FILTER_DATA_OUT}integrated_seurat.csv.gz \
 --figures ${RESULTS}clone_tables \
---clones = ${WORKDIR}scripts/clones_of_interest.R"))
+--clones = ${WORKDIR}scripts/clones_of_interest.R
 
+# Seurat plots
+Rscript ${SCRIPTS}06_seurat_plots.R \
+--seurat ${FILTER_DATA_OUT}integrated_seurat.rds \
+--figures ${RESULTS} 
 
+# Custom UMAPs
+Rscript ${SCRIPTS}07_custom_umaps.R \
+--metadata ${FILTER_DATA_OUT}integrated_seurat.csv.gz \
+--figures ${RESULTS}umap
+--clones = ${WORKDIR}scripts/clones_of_interest.R
 
-
-# 
-# # Custom UMAPs
-# Rscript ${SCRIPTS}08_custom_umaps.R \
-# --metadata ${FILTER_DATA_OUT}integrated_seurat.csv.gz \
-# --figures ${RESULTS}umap
-# 
-# # Differential expression
-# Rscript ${SCRIPTS}09_differential_expression.R \
-# --input ${FILTER_DATA_OUT}integrated_seurat.rds \
-# --output ${RESULTS}differential_expression
+# Differential expression for clones of interest
+Rscript ${SCRIPTS}08_clones_of_interest.R \
+--seurat ${FILTER_DATA_OUT}integrated_seurat.rds \
+--figures ${RESULTS}clone_of_interest \
+--output ${FILTER_DATA_OUT} 

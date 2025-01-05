@@ -1,5 +1,7 @@
+# ----------------------------------------------------------------------------
 # Libraries and setup ----
 
+library("argparse")
 library("ComplexHeatmap")
 library("ggplot2")
 library("ggrepel")
@@ -12,193 +14,293 @@ library("Seurat")
 library("tidyverse")
 library("viridis")
 
-project_dir <- tryCatch({Sys.getenv()[["project_dir"]]},
-                        error = function(cond){return(".")})
-fig_dir <- file.path(project_dir, "figures/subcluster_coi/")
+parser <- ArgumentParser(description = "Differential expression analyses")
+parser$add_argument('--seurat', '-s',
+                    help = 'Filename of Seurat object')
+parser$add_argument('--figures',  '-f', 
+                    help = 'Directory for saving figures')
+parser$add_argument('--output',  '-o', 
+                    help = 'Directory for saving subset seurat object')
+args <- parser$parse_args()
 
 
-# NOTE - THIS IS WITH THE ORIGINAL CLUSTERING 
-seurat_rpca <- read_rds(file.path(project_dir,
-                                  "data/processed/integrated_sketch_rpca.rds"))
+args = list(seurat = "data/processed/cd8_and_tcr/integrated_seurat.rds",
+            figures = "results/cd8_and_tcr/clone_of_interest/",
+            output = "data/processed/cd8_and_tcr/cl2_subcluster.rds")
 
-# Get sequences for clone of interest
-source(file.path(project_dir, "scripts/clones_of_interest.R"))
+# ----------------------------------------------------------------------------
+# marker_set_2 ----
+marker_set_2 <- function(){
+    return(c("ANXA1", "KIR3DL1", "IL7R", "KLRG1", "TOX", "KLRB1", "CD74", 
+             "KLF2", "IFRD1", "MIF", "IRF1", "RUNX3", "ELF1", "AKNA",
+             "IFNGR1", "KLRF1", "EOMES", "PDCD1", "SLAMF6", "GZMB", "GZMH",
+             "GZMK", "TCF7", "XCL1"))
+}
 
-marker_set_2 <- c("ANXA1", "KIR3DL1", "IL7R", "KLRG1", "TOX", "KLRB1", "CD74", 
-                  "KLF2", "IFRD1", "MIF", "IRF1", "RUNX3", "ELF1", "AKNA",
-                  "IFNGR1", "KLRF1", "EOMES", "PDCD1", "SLAMF6", "GZMB", "GZMH",
-                  "GZMK", "TCF7", "XCL1")
+# heatmap_pseudobulk ----
+heatmap_pseudobulk <- function(pseudo, out_fname, markers = marker_set_2()){
+    
+    # NEEDS PRINT?
+    
+    # Heatmap expression of selected markers by sample
+    anno <- pseudo[[]][, c("Sample", "beta_aa")]
+    mtx <- GetAssayData(pseudo)[markers, ]
+    
+    row_anno = rowAnnotation(Sample = anno$Sample)
+    
+    # Markers scaled
+    pdf(out_fname, height = 12, width = 9)
+    p <- Heatmap(scale(t(mtx)),
+            row_names_gp = gpar(fontsize = 4),
+            right_annotation = row_anno)
+    print(p)
+    dev.off()
+}
 
-# UMAP of cluster 2 ----
+# Aggregate across sample and clone ----
+run_pseudobulk <- function(seurat_obj, out_fname){
+    # Note that Seurat appears to use "average" by default -
+    # AggregateExpression wraps PseudobulkExpression which has default method
+    # "average"
+    
+    pseudobulk <- AggregateExpression(seurat_obj,
+                                      assays = "RNA",
+                                      return.seurat = TRUE,
+                                      group.by = c("Sample", "beta_aa"))
+    
+    write_rds(pseudobulk, file = file.path(out_fname))
+    return(pseudobulk)
+}
 
-# Names of graphs to use in FindSubCluster names(seurat_rpca@graphs)
-# FindSubCluster using sketch_snn or sketch_nn doesn't assign clusters to all
+# Subset by number of cell per clone ----
+subset_clones <- function(seurat_obj, out_fname, n = 10){
+    # Subset to just the clones with at least n (default 10) cells
+    temp <- seurat_obj[[]] %>%
+        dplyr::group_by(Sample, beta_aa) %>%
+        dplyr::mutate(top_clone = 
+                          case_when(n() >= n & ! beta_aa == "NA_NA" ~ TRUE,
+                                    TRUE ~ FALSE))
+    top_clones <- subset(seurat_obj, cells = Cells(seurat_obj)[temp$top_clone])
+    
+    # Write table of top clones
+    top_clones[[]] %>%
+        dplyr::group_by(Sample, beta_aa) %>%
+        dplyr::summarise(n_cells = n()) %>%
+        readr::write_csv(file = out_fname)
+    
+    return(top_clones)
+}
 
-cl2_subs <- subset(seurat_rpca,
-                   cells = which(seurat_rpca$seurat_clusters == "2"))
+# UMAP clone of interest ----
+umap_coi <- function(meta, fig_dir){
+    meta$is_coi = c(2, 0.5)[as.numeric(meta$coi == "no") + 1]
+    meta <- meta %>%
+        dplyr::mutate(coi = factor(coi, levels = c("no", "Ri01", "Ri02"))) %>%
+        dplyr::arrange(coi) %>%
+        dplyr::mutate(coi = as.character(coi))
+    
+    coi_colours <- structure(c("lightgray","#DC050C","steelblue"),
+                             names = c("no", "Ri01", "Ri02"))
+    
+    pdf(file.path(fig_dir, "umap_coi.pdf"),
+        height = 12, width = 12)
+    p <- ggplot(meta, 
+           aes(x = umap_1, y = umap_2)) +
+        geom_point(aes(size = is_coi, colour = coi)) +
+        scale_size_identity() +
+        theme_minimal(base_size = 15) +
+        scale_color_manual(labels = names(coi_colours), values = coi_colours) +
+        labs(x = "UMAP dimension 1", y = "UMAP dimension 2") +
+        theme(panel.grid.major = element_blank(),
+              panel.grid.minor = element_blank())
+    print(p)
+    dev.off()
+}
 
-DefaultAssay(cl2_subs) <- "RNA"
-cl2_subs[["RNA"]] <- JoinLayers(cl2_subs[["RNA"]])
-
-cl2 <- CreateSeuratObject(GetAssayData(cl2_subs, "RNA"),
-                          meta.data = cl2_subs[[]])
-
-cl2[["RNA"]] <- split(cl2[["RNA"]], f = cl2$Sample)
-cl2 <- NormalizeData(cl2)
-cl2 <- FindVariableFeatures(cl2)
-cl2 <- ScaleData(cl2, features = Features(cl2))
-cl2 <- RunPCA(cl2)
-
-# Integrate with RPCA ----
-cl2 <- IntegrateLayers(cl2,
-                       method = RPCAIntegration,
-                       orig = "pca",
-                       new.reduction = "integrated.rpca",
-                       dims = 1:30,
-                       k.anchor = 20)
-
-cl2 <- FindNeighbors(cl2,
-                     reduction = "integrated.rpca",
-                     dims = 1:30)
-cl2 <- FindClusters(cl2,
-                    cluster.name = "subcluster")
-cl2 <- RunUMAP(cl2,
-               reduction = "integrated.rpca",
-               dims = 1:30)
-
-cl2[["RNA"]] <- JoinLayers(cl2[["RNA"]])
-
-write_rds(cl2, file = file.path(project_dir,
-                                "data/processed/cl2_subclusters.rds"))
-
-# Add UMAP coordinates ----
-um <- Embeddings(cl2[["umap"]])
-identical(rownames(um), rownames(cl2[[]]))
-cl2[[]] <- dplyr::bind_cols(cl2[[]], um)
 
 # UMAP by sample and cluster ----
+umap_sample_cluster <- function(){
+    pdf(file.path(fig_dir, "umap_by_sample_and_cluster.pdf"),
+        height = 5, width = 10)
+    p1 <- DimPlot(cl, group.by = "Sample") 
+    p2 <- DimPlot(cl, group.by = "subcluster") 
+    print(p1 + p2)
+    dev.off()
+}
 
-pdf(file.path(fig_dir, "umap_by_sample_and_cluster.pdf"),
-    height = 5, width = 10)
-p1 <- DimPlot(cl2, group.by = "Sample") 
-p2 <- DimPlot(cl2, group.by = "subcluster") 
-p1 + p2
-dev.off()
+# Run subclustering ----
+subcluster <- function(seurat_obj, outdir, cl_nm = "2"){
+    # Names of graphs to use in FindSubCluster names(seurat_obj@graphs)
+    # FindSubCluster using sketch_snn or sketch_nn doesn't assign clusters to all
+    
+    cl_subs <- subset(seurat_obj,
+                       cells = which(seurat_obj$seurat_clusters == cl_nm))
+    
+    DefaultAssay(cl_subs) <- "RNA"
+    cl_subs[["RNA"]] <- JoinLayers(cl_subs[["RNA"]])
+    
+    cl <- CreateSeuratObject(GetAssayData(cl_subs, "RNA"),
+                              meta.data = cl_subs[[]])
+    
+    cl[["RNA"]] <- split(cl[["RNA"]], f = cl$Sample)
+    cl <- NormalizeData(cl)
+    cl <- FindVariableFeatures(cl)
+    cl <- ScaleData(cl, features = Features(cl))
+    cl <- RunPCA(cl)
+    
+    # Integrate with RPCA ----
+    cl <- IntegrateLayers(cl,
+                           method = RPCAIntegration,
+                           orig = "pca",
+                           new.reduction = "integrated.rpca",
+                           dims = 1:30,
+                           k.anchor = 20)
+    
+    cl <- FindNeighbors(cl,
+                         reduction = "integrated.rpca",
+                         dims = 1:30)
+    cl <- FindClusters(cl,
+                        cluster.name = "subcluster")
+    cl <- RunUMAP(cl,
+                   reduction = "integrated.rpca",
+                   dims = 1:30)
+    
+    cl[["RNA"]] <- JoinLayers(cl[["RNA"]])
+    
+    # Add UMAP coordinates 
+    um <- Embeddings(cl[["umap"]])
+    identical(rownames(um), rownames(cl[[]]))
+    cl[[]] <- dplyr::bind_cols(cl[[]], um)
+    
+    write_rds(cl,
+              file = file.path(outdir, sprintf("%s_subclusters.rds", cl_nm)))
+    return(cl)
+}
+
+subcluster_de <- function(cl, fig_dir){
+    # Differential expression between clone of interest and others ----
+    
+    cl$is_coi = ifelse(cl$coi == "no", "non-coi", "coi")
+    
+    Idents(cl) <- cl$Sample
+    cl2_ri01_02 <- subset(cl, idents = c("Ri01_dis", "Ri02"))
+    Idents(cl2_ri01_02) <- cl2_ri01_02$is_coi
+    
+    coi_v_other_cl2_ri_samples <- FindAllMarkers(object = cl2_ri01_02) %>%
+        dplyr::filter(p_val_adj <= 0.05, cluster == "coi") %>%
+        dplyr::select(-cluster) %>%
+        dplyr::relocate(gene)
+    
+    readr::write_csv(coi_v_other_cl2_ri_samples,
+                     file = file.path(fig_dir, "de_coi_v_other_cl2_ri01_dis_ri02.csv"))
+    
+    # Differential expression between Ri and Healthy samples ----
+    
+    cl$Condition <- gsub("[0-9]+(_dis|_5m)?$", "", cl$Sample)
+    Idents(cl) <- cl$Condition
+    
+    ri_v_healthy <- FindAllMarkers(object = cl) %>%
+        dplyr::filter(p_val_adj <= 0.05, cluster == "Ri") %>%
+        dplyr::select(-cluster) %>%
+        dplyr::relocate(gene) %>%
+        write_csv(file = file.path(fig_dir, "de_Ri_v_healthy_cl_2.csv"))
+    
+    
+    # Differential expression coi per sample ----
+    
+    # Ri01_dis
+    
+    Idents(cl2) <- "Sample"
+    cl2_ri01_dis <- subset(cl2, idents = c("Ri01_dis"))
+    Idents(cl2_ri01_dis) <- cl2_ri01_dis$is_coi
+    
+    coi_v_other_cl2_ri01_dis <- FindAllMarkers(object = cl2_ri01_dis) %>%
+        dplyr::filter(p_val_adj <= 0.05, cluster == "coi") %>%
+        dplyr::select(-cluster) %>%
+        dplyr::relocate(gene)
+    
+    readr::write_csv(coi_v_other_cl2_ri01_dis,
+                     file = file.path(fig_dir, "de_coi_v_other_cl2_ri01_dis.csv"))
+    
+    # ---------------------------------
+    # Ri01_5m
+    
+    Idents(cl2) <- "Sample"
+    cl2_ri01_5m <- subset(cl2, idents = c("Ri01_5m"))
+    Idents(cl2_ri01_5m) <- cl2_ri01_5m$is_coi
+    
+    coi_v_other_cl2_ri01_5m <- FindAllMarkers(object = cl2_ri01_5m) %>%
+        dplyr::filter(p_val_adj <= 0.05, cluster == "coi") %>%
+        dplyr::select(-cluster) %>%
+        dplyr::relocate(gene)
+    
+    readr::write_csv(coi_v_other_cl2_ri01_dis,
+                     file = file.path(fig_dir, "de_coi_v_other_cl2_ri01_5m.csv"))
+    
+    # Clone of interest, _dis v _5m 
+    
+    Idents(cl2) <- "Sample"
+    cl2_ri01 <- subset(cl2, idents = c("Ri01_5m", "Ri01_dis"))
+    Idents(cl2_ri01) <- "coi"
+    cl2_ri01_coi <- subset(cl2_ri01, idents = c("Ri01"))
+    Idents(cl2_ri01_coi) <- "Sample"
+    
+    ri01_dis_v_5m <- FindAllMarkers(object = cl2_ri01_coi) %>%
+        dplyr::filter(p_val_adj <= 0.1, cluster == "Ri01_dis") %>%
+        dplyr::select(-cluster) %>%
+        dplyr::relocate(gene)
+    
+    readr::write_csv(ri01_dis_v_5m,
+                     file = file.path(fig_dir, "de_ri01_dis_v_5m.csv"))
+    
+    
+    
+    # Other DE analyses ----
+    Idents(cl2) <- cl2$is_coi
+    coi_de <- FindAllMarkers(object = cl2) %>%
+        dplyr::filter(p_val_adj <= 0.01, cluster == "coi") %>%
+        readr::write_csv(file = file.path(fig_dir, "de_coi_v_other_cl2.csv"))
+    
+    Idents(cl2) <- cl2$subcluster
+    subcluster_de <- FindAllMarkers(object = cl2) %>%
+        dplyr::filter(p_val_adj <= 0.01) %>%
+        readr::write_csv(file = file.path(fig_dir, "de_cl2_subclusters.csv"))
+}
+
+# Main ----
+main <- function(args){
+    if (! dir.exists(args$figures)) { dir.create(args$figures) }
+    
+    seurat_obj <- read_rds(args$seurat)
+    source(args$clone)
+    coi <- get_coi()
+    
+    cl2_subcluster <- subcluster(seurat_obj, args$output, cl_nm = "2")
+    cl2_meta <- cl2_subcluster[[]] %>%
+        dplyr::mutate(coi = case_when(beta_aa == coi[["ri01_coi"]] ~ "Ri01",
+                                      beta_aa == coi[["ri02_coi"]] ~ "Ri02",
+                                      TRUE ~ "no"))
+    cl2_subcluster[[]] <- cl2_meta 
+    
+    umap_coi(cl2_meta, args$figures)
+    cl2_top_fname <- file.path(args$output, "cl2_top_clones.csv")
+    cl2_top_clones <- subset_clones(cl2_subcluster, cl2_top_fname, n = 10)
+    
+    cl2_pseudo_out <- file.path(args$output, "cl2_pseudobulk.rds")
+    cl2_pseudo <- run_pseudobulk(cl2_subcluster, cl2_pseudo_out)
+    
+    heatmap_pseudobulk(cl2_pseudo,
+                       file.path(args$figures, "heatmap_cl2_pseudobulk.pdf"))
+    
+    subcluster_de(cl2_subcluster, args$figures)
+}
+
+# ----------------------------------------------------------------------------
+main(args)
 
 # UMAP with clones of interest ----
 
-# Are the clones of interest restricted to one subcluster ----
-x <- cl2[[]] %>%
-    dplyr::group_by(Sample, beta_aa, subcluster, coi) %>%
-    dplyr::summarise(n = n()) %>%
-    dplyr::filter(! coi == "no") %>%
-    dplyr::arrange(desc(n))
 
-
-meta <- cl2[[]]
-
-meta$is_coi = c(2, 0.5)[as.numeric(meta$coi == "no") + 1]
-meta <- meta %>%
-    dplyr::mutate(coi = factor(coi, levels = c("no", "Ri01", "Ri02"))) %>%
-    dplyr::arrange(coi) %>%
-    dplyr::mutate(coi = as.character(coi))
-
-coi_colours <- structure(c("lightgray","#DC050C","steelblue"),
-                         names = c("no", "Ri01", "Ri02"))
-
-
-pdf(file.path(fig_dir, "umap_coi.pdf"),
-    height = 12, width = 12)
-ggplot(meta, 
-       aes(x = umap_1, y = umap_2)) +
-    geom_point(aes(size = is_coi, colour = coi)) +
-    scale_size_identity() +
-    #facet_wrap(~Sample) +
-    theme_minimal(base_size = 15) +
-    scale_color_manual(labels = names(coi_colours), values = coi_colours) +
-    labs(x = "UMAP dimension 1", y = "UMAP dimension 2") +
-    theme(panel.grid.major = element_blank(),
-          panel.grid.minor = element_blank())
-
-dev.off()
-
-# Heatmap expression of selected markers by sample ----
-
-# Subset to just the clones with at least 10 cells
-temp <- cl2[[]] %>%
-    dplyr::group_by(Sample, beta_aa) %>%
-    dplyr::mutate(top_clone = 
-                    case_when(n() >= 10 & ! beta_aa == "NA_NA" ~ TRUE,
-                              TRUE ~ FALSE))
-cl2_top_clones <- subset(cl2, cells = Cells(cl2)[temp$top_clone])
-
-# Write table of top clones
-cl2_top_clones[[]] %>%
-    dplyr::group_by(Sample, beta_aa) %>%
-    dplyr::summarise(n_cells = n()) %>%
-    readr::write_csv(file = file.path(fig_dir, "cluster_2_top_clones.csv"))
-
-# Aggregate across sample and clone
-# Note that Seurat appears to use "average" by default -
-# AggregateExpression wraps PseudobulkExpression which has default method
-# "average"
-pseudo_cl2 <- AggregateExpression(cl2_top_clones,
-                                  assays = "RNA",
-                                  return.seurat = TRUE,
-                                  group.by = c("Sample", "beta_aa"))
-
-write_rds(pseudo_cl2, file = file.path(project_dir,
-                                "data/processed/cl2_pseudobulk.rds"))
-
-
-
-anno <- pseudo_cl2[[]][, c("Sample", "beta_aa")]
-mtx <- GetAssayData(pseudo_cl2)[marker_set_2, ]
-
-row_anno = rowAnnotation(Sample = anno$Sample)
-
-
-# Raw expression
-Heatmap(t(mtx),
-        row_names_gp = gpar(fontsize = 2),
-        right_annotation = row_anno)
-
-# Markers scaled
-pdf(file.path(fig_dir, "heatmap_cluster_2_selected_markers.pdf"),
-    height = 12, width = 9)
-Heatmap(scale(t(mtx)),
-        row_names_gp = gpar(fontsize = 4),
-        right_annotation = row_anno)
-
-dev.off()
-
-
-# Differential expression between clone of interest and others ----
-
-cl2$is_coi = ifelse(cl2$coi == "no", "non-coi", "coi")
-
-Idents(cl2) <- cl2$Sample
-cl2_ri01_02 <- subset(cl2, idents = c("Ri01_dis", "Ri02"))
-Idents(cl2_ri01_02) <- cl2_ri01_02$is_coi
-
-coi_v_other_cl2_ri_samples <- FindAllMarkers(object = cl2_ri01_02) %>%
-    dplyr::filter(p_val_adj <= 0.05, cluster == "coi") %>%
-    dplyr::select(-cluster) %>%
-    dplyr::relocate(gene)
-
-readr::write_csv(coi_v_other_cl2_ri_samples,
-                 file = file.path(fig_dir, "de_coi_v_other_cl2_ri01_dis_ri02.csv"))
-
-# Differential expression between Ri and Healthy samples ----
-
-cl2$Condition <- gsub("[0-9]+(_dis|_5m)?$", "", cl2$Sample)
-Idents(cl2) <- cl2$Condition
-
-ri_v_healthy <- FindAllMarkers(object = cl2) %>%
-    dplyr::filter(p_val_adj <= 0.05, cluster == "Ri") %>%
-    dplyr::select(-cluster) %>%
-    dplyr::relocate(gene) %>%
-    write_csv(file = file.path(fig_dir, "de_Ri_v_healthy_cl_2.csv"))
 
 # Heatmap of significant genes, grouped by clone ----
 
@@ -253,65 +355,7 @@ DoHeatmap(cl2_ri01_02,
           features = coi_v_other_cl2_ri_samples$gene) 
 dev.off()
 
-# Differential expression coi per sample ----
 
-# Ri01_dis
-
-Idents(cl2) <- "Sample"
-cl2_ri01_dis <- subset(cl2, idents = c("Ri01_dis"))
-Idents(cl2_ri01_dis) <- cl2_ri01_dis$is_coi
-
-coi_v_other_cl2_ri01_dis <- FindAllMarkers(object = cl2_ri01_dis) %>%
-    dplyr::filter(p_val_adj <= 0.05, cluster == "coi") %>%
-    dplyr::select(-cluster) %>%
-    dplyr::relocate(gene)
-
-readr::write_csv(coi_v_other_cl2_ri01_dis,
-                 file = file.path(fig_dir, "de_coi_v_other_cl2_ri01_dis.csv"))
-
-
-# Ri01_5m
-
-Idents(cl2) <- "Sample"
-cl2_ri01_5m <- subset(cl2, idents = c("Ri01_5m"))
-Idents(cl2_ri01_5m) <- cl2_ri01_5m$is_coi
-
-coi_v_other_cl2_ri01_5m <- FindAllMarkers(object = cl2_ri01_5m) %>%
-    dplyr::filter(p_val_adj <= 0.05, cluster == "coi") %>%
-    dplyr::select(-cluster) %>%
-    dplyr::relocate(gene)
-
-readr::write_csv(coi_v_other_cl2_ri01_dis,
-                 file = file.path(fig_dir, "de_coi_v_other_cl2_ri01_5m.csv"))
-
-# Clone of interest, _dis v _5m 
-
-Idents(cl2) <- "Sample"
-cl2_ri01 <- subset(cl2, idents = c("Ri01_5m", "Ri01_dis"))
-Idents(cl2_ri01) <- "coi"
-cl2_ri01_coi <- subset(cl2_ri01, idents = c("Ri01"))
-Idents(cl2_ri01_coi) <- "Sample"
-
-ri01_dis_v_5m <- FindAllMarkers(object = cl2_ri01_coi) %>%
-    dplyr::filter(p_val_adj <= 0.1, cluster == "Ri01_dis") %>%
-    dplyr::select(-cluster) %>%
-    dplyr::relocate(gene)
-
-readr::write_csv(ri01_dis_v_5m,
-                 file = file.path(fig_dir, "de_ri01_dis_v_5m.csv"))
-
-
-
-# Other DE analyses ----
-Idents(cl2) <- cl2$is_coi
-coi_de <- FindAllMarkers(object = cl2) %>%
-    dplyr::filter(p_val_adj <= 0.01, cluster == "coi") %>%
-    readr::write_csv(file = file.path(fig_dir, "de_coi_v_other_cl2.csv"))
-
-Idents(cl2) <- cl2$subcluster
-subcluster_de <- FindAllMarkers(object = cl2) %>%
-    dplyr::filter(p_val_adj <= 0.01) %>%
-    readr::write_csv(file = file.path(fig_dir, "de_cl2_subclusters.csv"))
 
 # Ri01_dis coi versus Ri01_dis other clones ----
 

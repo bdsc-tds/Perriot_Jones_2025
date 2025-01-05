@@ -1,3 +1,4 @@
+# ----------------------------------------------------------------------------
 # Libraries and setup ----
 
 library("argparse")
@@ -14,6 +15,7 @@ parser$add_argument('--clones',  '-c',
 args <- parser$parse_args()
 
 # ----------------------------------------------------------------------------
+# Functions ----
 # Clone composition of clusters containing clones of interest ----
 clones_in_coi <- function(meta, out_dir){
     # Select clusters with at least 5 clones of interest,
