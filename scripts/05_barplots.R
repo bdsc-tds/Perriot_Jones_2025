@@ -73,6 +73,7 @@ get_cluster_percent <- function(md){
 } 
 
 # Bar cluster per sample----
+# FIGURE NOT WORKING
 bar_cluster_per_sample <- function(md, fig_dir){
     pdf(file.path(fig_dir, "bar_cluster_per_sample.pdf"))
     p <- ggplot(md, aes(fill = seurat_clusters, x = Sample)) +
@@ -87,6 +88,7 @@ bar_cluster_per_sample <- function(md, fig_dir){
 }
 
 # Plot cluster by sample unscaled ----
+# FIGURE NOT WORKING
 cluster_by_sample_unscaled <- function(md, fig_dir){
     pdf(file.path(fig_dir, "bar_sample_per_cluster_unscaled.pdf"))
     p <- ggplot(md, aes(x = seurat_clusters,

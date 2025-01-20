@@ -6,8 +6,8 @@ tcr <- file.path(workdir, "data/processed/combined_tcr.rds")
 cb_input <- file.path(workdir, "data/cellbender_input.txt")
 seurat_out <- file.path(workdir, "data/processed/unfiltered/seurat.rds")
 cb_dir <- file.path(workdir, "data/processed/cellbender/filtered")
-cd8_and_tcr_data <- file.path(workdir, "data/processed/cd8_and_tcrb")
-cd8_and_tcr_res <- file.path(workdir, "results/cd8_and_tcrb")
+cd8_and_tcr_data <- file.path(workdir, "data/processed/cd8_and_tcr")
+cd8_and_tcr_res <- file.path(workdir, "results/cd8_and_tcr")
 cd8_and_tcr_seurat <- file.path(cd8_and_tcr_data, "filtered_seurat.rds")
 cd8_and_tcr_integrated <- file.path(cd8_and_tcr_data, "integrated_seurat.rds")
 
@@ -46,8 +46,15 @@ args <- list(metadata = file.path(cd8_and_tcr_data, "integrated_seurat.rds"),
 
 # 07_custom_umaps.R
 args <- list(metadata = "data/processed/cd8_and_tcr/integrated_seurat.csv.gz", 
-     figures = "results/cd8_and_tcr", output = "results/cd8_and_tcr//clone_of_interest", 
+     figures = "results/cd8_and_tcr",
+     output = "results/cd8_and_tcr//clone_of_interest",  
      clone = "scripts/clones_of_interest.R")
+
+# 08_clones_of_interest.R
+args <- list(seurat=file.path(cd8_and_tcr_data, "integrated_seurat.rds"),
+             figures=file.path(cd8_and_tcr_res, "coi_subcluster"),
+             output=cd8_and_tcr_data,
+             clones = file.path(workdir, "scripts/clones_of_interest.R"))
 
 
 # 08_clones_of_interest.R 

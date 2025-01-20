@@ -27,6 +27,7 @@ args <- parser$parse_args()
 # ----------------------------------------------------------------------------
 # Functions ----
 # make_umaps ----
+# FIGURES NOT PRINTING
 make_umaps <- function(seurat_obj, fig_dir){
     
     pdf(file.path(fig_dir, "umap_rpca.pdf"), width = 12, height = 12)
