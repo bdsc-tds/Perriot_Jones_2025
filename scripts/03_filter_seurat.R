@@ -63,4 +63,4 @@ filter_seurat <- function(args){
 # ----------------------------------------------------------------------------   
 # Run ----
 
-filter_seurat(args)
+annotate_tcrs(args)

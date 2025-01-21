@@ -15,11 +15,18 @@ CB_DIR='${WORKDIR}data/processed/cellbender'
 INTEGRATION_METHOD='rpca'
 
 #--------------------------------------------------------------------------
+# TO DO - add 00_format_tcr_sequences
+
 # Combine cellbender samples into Seurat object
 Rscript ${SCRIPTS}02_make_seurat.R \
 --tcr ${TCR} --samples ${CB_INPUT} \
 --output ${DATA_OUT} \
 --cellbender ${CB_DIR} 
+
+# Annotate clones of interest
+Rscript ${SCRIPTS}03_annotate_seurat.R \
+--seurat ${DATA_OUT}'unfiltered/seurat.rds'
+--annotation ${DATA_OUT}tcr_seqs.csv \
 
 # Apply filters
 Rscript ${SCRIPTS}03_filter_seurat.R \
