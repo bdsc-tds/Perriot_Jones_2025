@@ -8,8 +8,10 @@ clone_dir <- "data/raw/clones_of_interest/"
 
 neuron_reactive <- file.path(clone_dir, "20250227_List_K.xlsx")
 selected_clones <- file.path(clone_dir, "20250228_List_%s.xlsx")
+selected_clones <- sprintf(selected_clones, "N")
 
 clones_w_alpha <- "data/raw/20250114_TCR_list_Helen.xlsx"
+processed_clones_out <- "data/processed/clone_sets.csv" 
 
 #--------------------------------------------------------------------------
 
@@ -93,8 +95,12 @@ process_all_sheets <- function(fname){
 
 reformat_tcr_name <- function(df){
     df %>% 
-        dplyr::mutate(tcr_name_alpha = gsub('[\"\u00A0]', "", tcr_name),
-                      tcr_name_alpha = gsub("\\s", "", tcr_name_alpha),
+        dplyr::mutate(tcr_name = gsub('[\"\u00A0]', "", tcr_name),
+                      tcr_name = gsub('\\s+', " ", tcr_name),
+                      tcr_name = gsub("-TCR", "- TCR", tcr_name),
+                      tcr_name = gsub("((HD|Ri)[0-9]+)- TCR", "\\1 - TCR", tcr_name),
+                      
+                      tcr_name_alpha = gsub("\\s", "", tcr_name),
                       tcr_name_alpha = gsub("\\(", " \\(", tcr_name_alpha),
                       tcr_name_alpha = gsub("-", "_", tcr_name_alpha),
                       tcr_name_alpha = gsub("TCR", "TCR_", tcr_name_alpha))
@@ -124,57 +130,64 @@ process_alpha_clones <- function(fname){
 process_neuron_rxt <- function(reactive_clones,
                                selected_clones,
                                alpha_clones,
-                               sets = c("M","N")){
+                               outfname){
     # Only list K is needed:
     # List I = all neuron reactive
     # List J = all Ri
     # List K = all clones
     # List L = all HD
     
-    # List N = all clones in cluster 2?
-    # List M = selected clones from cluster 2?
+    # List M = all clones in cluster 2 with at least 5 reads
+    # List N = selected clones 
     
     # List with alpha chains
     alpha_clones <- process_alpha_clones(alpha_clones)
     
-    reactive_clones <- process_all_sheets(reactive_clones) %>%
-        dplyr::mutate(tcr_category = gsub("_.*", "", tcr_category)) %>%
+    # Selected clones for differential expression analyses ----
+    selected_clones <- process_all_sheets(selected_clones) %>%
+        dplyr::mutate(selected_clone = TRUE,
+                      Sample = case_when(patient == "Ri01" ~ "Ri01_dis",
+                                      TRUE ~ patient)) %>%
+        dplyr::select(-tcr_category) %>%
+        reformat_tcr_name() 
+
+    clones <- process_all_sheets(reactive_clones) %>%
+        dplyr::mutate(tcr_category = gsub("_.*", "", tcr_category),
+                      reactive = 
+                          case_when(tcr_category == "Neuron-reactive" ~ TRUE,
+                                    tcr_category == "Non-reactive" ~ FALSE,
+                                    TRUE ~ NA)) %>%
+        dplyr::select(-tcr_category) %>%
         reformat_tcr_name() %>%
-                      
+        
+        # Manually checked that this doesn't result in extra rows that
+        # should be merged
+        full_join(selected_clones) 
+        
+        
+    # Name is needed to add the alpha 
+    # Patch name to match name used reactivity 
+    no_tcr_name <- clones %>%
+        dplyr::filter(is.na(tcr_name))
+        
+    clones <- clones %>%    
+        dplyr::filter(! is.na(tcr_name)) %>%
+
         # Not all alpha clones are in the reactive clones
         # Two reactive clones are missing from the alpha clones, these will be
         # patched
-        
         dplyr::left_join(alpha_clones, relationship = "one-to-one") %>%
         
         # Only two reactive clones are not in the alpha clones, 
         # these will be patched 
-        patch_alpha() 
-    
-    selected_clones <- lapply(sets, function(nm){
-        fname <- sprintf(selected_clones, nm)
-        process_all_sheets(fname) %>%
-            dplyr::mutate(clone_set = nm)
-        }) %>%
-        dplyr::bind_rows() %>%
-        # Set M contains Sample, not patient 
-        dplyr::mutate(Sample = case_when(clone_set == "M"~patient,
-                                         TRUE ~ NA_character_),
-                      patient = case_when(clone_set == "N" ~patient,
-                                          clone_set == "M" ~
-                                              gsub("_.*", "", Sample))) %>%
-        reformat_tcr_name() %>%
-        # Fill in patient (assuming there are no clones from Ri01_5m) 
-        dplyr::group_by(patient) %>%
-        tidyr::fill(Sample, .direction = "updown")
+        patch_alpha() %>%
         
-        # Name is needed to add the alpha 
-        # Patch name to match name used reactivity 
-    
+        # Add in the unmatched tcrs again
+        dplyr::bind_rows(no_tcr_name)
   
     # Set N contains clones from a variety of clusters, mostly cluster 2
-    
-   
+    write_csv(clones, file = outfname)
+    invisible(clones)
 }
 
 # Scratch ----
@@ -281,16 +294,46 @@ scratch(){
         group_by(patient, cdr3_aa_beta) %>%
         filter(n() > 1)
     # Need the names to match the alpha chains.
+    
+    # (cut from processing function, for processing set M and N together)
+    # Selected clones for differential expression analyses ----
+    selected_clones <- lapply(sets, function(nm){
+        fname <- sprintf(selected_clones, nm)
+        process_all_sheets(fname) %>%
+            dplyr::mutate(clone_set = nm)
+    }) %>%
+        dplyr::bind_rows() %>%
+        # Set M contains Sample, not patient 
+        dplyr::mutate(Sample = case_when(clone_set == "M"~patient,
+                                         TRUE ~ NA_character_),
+                      patient = case_when(clone_set == "N" ~patient,
+                                          clone_set == "M" ~
+                                              gsub("_.*", "", Sample))) %>%
+        # Fill in patient (assuming there are no clones from Ri01_5m) 
+        dplyr::group_by(patient) %>%
+        tidyr::fill(Sample, .direction = "updown") %>%
+        dplyr::ungroup() %>%
+        # Set name not needed anymore as it is coded in tcr_category
+        # Cluster 2 not ne
+        dplyr::select(-clone_set) %>%
+        
+        dplyr::mutate(selected_clone =
+                          case_when(grepl("Selected_clones", tcr_category ~ TRUE,
+                                          TRUE ~ FALSE))) %>%
+        
+        # Checks on joined table
+        clones %>% group_by(tcr_name) %>% filter(n_distinct(cdr3_aa_beta) > 1)
+    
+       # All reactive clones are in selected clones?
 }
 
 
 #--------------------------------------------------------------------------
 
-process_neuron_rxt(neuron_reactive,
-                   selected_clones,
-                   clones_w_alpha,
-                   sets = c("M","N"))
-
+process_neuron_rxt(reactive_clones = neuron_reactive,
+                   selected_clones = selected_clones,
+                   alpha_clones = clones_w_alpha,
+                   outfname = processed_clones_out)
 
 #--------------------------------------------------------------------------
 
@@ -298,10 +341,13 @@ reactive_clones <- neuron_reactive
 
 
 # metadata for checking clones
-md <- read_csv("~/Analyses/Jones_tcell/archive/Feb_2025/data/processed/integrated_seurat.csv.gz")
-md <- md %>%
-    dplyr::mutate(patient = gsub("_dis|_5m", "", Sample)) %>%
-    dplyr::select(Sample, patient, matches("CT|TCR"), beta_aa, vj_aa, seurat_clusters) %>%
-    unique() %>%
-    dplyr::rename(cdr3_aa_beta = CTaa2)
+#md <- read_csv("~/Analyses/Jones_tcell/archive/Feb_2025/data/processed/integrated_seurat.csv.gz")
+#md <- md %>%
+#    dplyr::mutate(patient = gsub("_dis|_5m", "", Sample)) %>%
+#    dplyr::select(Sample, patient, matches("CT|TCR"),
+#                   beta_aa, vj_aa, seurat_clusters) %>%
+#    unique() %>%
+#    dplyr::rename(cdr3_aa_beta = CTaa2)
+
+#
 
