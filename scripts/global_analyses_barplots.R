@@ -47,8 +47,7 @@ barplot_data <- function(df, x, fill){
 make_barplot <- function(md, x, fill, out_fname,
                          ylab = "Proportion of cells", ht = 7, wd = 7){
     
-    pdf(file.path(fig_dir, "bar_cluster_per_sample.pdf"),
-        height = ht, width = wd)
+    pdf(out_fname, height = ht, width = wd)
     p <- ggplot(md, aes(x = {{x}}, fill = {{fill}})) +
         geom_bar(position = "fill", color = "black") +
         scale_y_continuous(expand = expansion(c(0,0))) +
@@ -69,20 +68,22 @@ make_barplots <- function(md, res_dir){
     # Clusters per sample
     make_barplot(md, x = seurat_clusters, fill = Sample,
                  out_fname = file.path(out_dir, "clusters_per_sample.pdf"))
-    barplot_data(df, x = seurat_clusters, fill = Sample) %>%
+    barplot_data(md, x = seurat_clusters, fill = Sample) %>%
         write_csv(file.path(out_dir, "clusters_per_sample.csv"))
     
     # Samples per cluster
     make_barplot(md, x = Sample, fill = seurat_clusters, 
                  out_fname = file.path(out_dir, "sample_per_cluster.pdf"))
-    barplot_data(df, x = Sample, fill = seurat_clusters, ) %>%
+    barplot_data(md, x = Sample, fill = seurat_clusters) %>%
         write_csv(file.path(out_dir, "sample_per_cluster.csv"))
 }
 
 
 # main ----
 main <- function(args){
-    if (! file.exists(args$results)) { dir.create(args$results) }
+    if (! file.exists(args$results)) { 
+        dir.create(args$results, recursive = TRUE)
+    }
     
     # Metadata with UMAP coordinates
     md <- read_csv(args$metadata) %>%

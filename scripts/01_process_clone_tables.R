@@ -351,3 +351,26 @@ reactive_clones <- neuron_reactive
 
 #
 
+
+# Match by beta chains
+
+md_beta <- md %>%
+    dplyr::inner_join(clones,
+                      by = c("Sample", "patient", "cdr3_aa_beta"),
+                      relationship = "many-to-one") %>%
+    dplyr::group_by(Sample, vj_aa) %>%
+    dplyr::summarise(n = n())
+
+
+md_alpha_beta <- md %>%
+    dplyr::inner_join(clones, by = c("Sample", "patient", "vj_aa")) %>%
+    dplyr::group_by(Sample, vj_aa, tcr_name) %>%
+    dplyr::summarise(n = n())
+                                                                                                                + )
+
+md %>% filter(cdr3_aa_beta == "CASSLGLAEQETQYF") %>%
+    dplyr::select(Sample, tcr_presence, vj_aa) %>%
+    dplyr::group_by(across(everything())) %>%
+    dplyr::summarise(n = n()) %>%
+    dplyr::relocate(Sample, tcr_presence, n) %>%
+    data.frame()
