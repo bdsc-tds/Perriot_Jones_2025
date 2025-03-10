@@ -11,7 +11,7 @@ selected_clones <- file.path(clone_dir, "20250228_List_%s.xlsx")
 selected_clones <- sprintf(selected_clones, "N")
 
 clones_w_alpha <- "data/raw/20250114_TCR_list_Helen.xlsx"
-processed_clones_out <- "data/processed/clone_sets.csv" 
+processed_clones_out <- "data/processed/merged_clone_sets.csv" 
 
 #--------------------------------------------------------------------------
 
@@ -23,7 +23,6 @@ alpha_patch <- function(){
         "Ri02", "CAFMNPRRDDKIIF", "CASSLERGLGGYTF", "TRAV38-1", "TRAJ30", "TRAC")
 }
     
-
 patch_alpha <- function(clones, patch_cols = NULL){
     
     patch <- alpha_patch()
@@ -93,6 +92,7 @@ process_all_sheets <- function(fname){
     return(clones %>% dplyr::bind_rows())
 }
 
+# Reformat tcr name ----
 reformat_tcr_name <- function(df){
     df %>% 
         dplyr::mutate(tcr_name = gsub('[\"\u00A0]', "", tcr_name),
@@ -101,7 +101,8 @@ reformat_tcr_name <- function(df){
                       tcr_name = gsub("((HD|Ri)[0-9]+)- TCR", "\\1 - TCR", tcr_name),
                       
                       tcr_name_alpha = gsub("\\s", "", tcr_name),
-                      tcr_name_alpha = gsub("\\(", " \\(", tcr_name_alpha),
+                      # Consolidate (1) and (2) into single entries
+                      tcr_name_alpha = gsub("\\(.*", "", tcr_name_alpha),
                       tcr_name_alpha = gsub("-", "_", tcr_name_alpha),
                       tcr_name_alpha = gsub("TCR", "TCR_", tcr_name_alpha))
 }
@@ -125,11 +126,10 @@ process_alpha_clones <- function(fname){
                       vj_aa = paste(alpha_vj_aa, beta_vj_aa, sep = "_")) 
 }
 
-
 # Process neuron reactive clones ----
 process_neuron_rxt <- function(reactive_clones,
                                selected_clones,
-                               alpha_clones,
+                               #alpha_clones,
                                outfname){
     # Only list K is needed:
     # List I = all neuron reactive
@@ -139,9 +139,6 @@ process_neuron_rxt <- function(reactive_clones,
     
     # List M = all clones in cluster 2 with at least 5 reads
     # List N = selected clones 
-    
-    # List with alpha chains
-    alpha_clones <- process_alpha_clones(alpha_clones)
     
     # Selected clones for differential expression analyses ----
     selected_clones <- process_all_sheets(selected_clones) %>%
@@ -164,15 +161,45 @@ process_neuron_rxt <- function(reactive_clones,
         # should be merged
         full_join(selected_clones) 
         
-        
+    #CSASNDRDYGYTF
+    
+    # Not found in this md 
+    # Ri01 TRBV28 CASSPGLGNYEQYF TRBJ02-7 Ri01_oldTCR_3 Ri01_dis 
+    # Ri02 TRBV13 CASSLERGLGGYTF TRBJ01-2 Ri02_TCR_C   Ri02     
+    
+    
+   # Merge clones sharing beta chain
+    clones <-
+        clones %>%
+        dplyr::group_by(patient, tcr_name_alpha) %>%
+        # Classify as reactive if any clone is reactive
+        dplyr::mutate(reactive = any(reactive == TRUE)) %>%
+        dplyr::select(-tcr_name) %>%
+        dplyr::rename(tcr_name = tcr_name_alpha) %>%
+        dplyr::ungroup() %>%
+        # Fix extra 0 in trbj
+        dplyr::mutate(trbj = gsub("TRBJ0", "TRBJ", trbj)) %>%
+        unique()
+    
+    # Set N contains clones from a variety of clusters, mostly cluster 2
+    write_csv(clones, file = outfname)
+    invisible(clones)
+}
+
+# Scratch ----
+scratch(){
+    # Alpha chains ----
+    # List with alpha chains
+    alpha_clones <- process_alpha_clones(alpha_clones)
+    
     # Name is needed to add the alpha 
     # Patch name to match name used reactivity 
     no_tcr_name <- clones %>%
         dplyr::filter(is.na(tcr_name))
-        
+    
     clones <- clones %>%    
         dplyr::filter(! is.na(tcr_name)) %>%
-
+        
         # Not all alpha clones are in the reactive clones
         # Two reactive clones are missing from the alpha clones, these will be
         # patched
@@ -184,15 +211,8 @@ process_neuron_rxt <- function(reactive_clones,
         
         # Add in the unmatched tcrs again
         dplyr::bind_rows(no_tcr_name)
-  
-    # Set N contains clones from a variety of clusters, mostly cluster 2
-    write_csv(clones, file = outfname)
-    invisible(clones)
-}
-
-# Scratch ----
-scratch(){
-    # Code used for checking, not run in pipeline
+    
+    # Code used for checking, not run in pipeline ----
     
     # Check that all of the selected clones appear in the meta data ----
     found_by_sample <- dplyr::semi_join(selected_clones, md,
@@ -332,7 +352,7 @@ scratch(){
 
 process_neuron_rxt(reactive_clones = neuron_reactive,
                    selected_clones = selected_clones,
-                   alpha_clones = clones_w_alpha,
+                   #alpha_clones = clones_w_alpha,
                    outfname = processed_clones_out)
 
 #--------------------------------------------------------------------------
