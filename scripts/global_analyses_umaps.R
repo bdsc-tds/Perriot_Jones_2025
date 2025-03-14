@@ -96,20 +96,20 @@ main <- function(args){
     seurat_subs <- subset(seurat_obj, Sample != "Ri01_5m")
     Idents(seurat_obj) <- "Sample"
     pdf(file.path(results, "samples_excluding_Ri01_5m.pdf"))
-    
-    DimPlot(seurat_obj, reduction = "umap.full")
+    p <- DimPlot(seurat_obj, reduction = "umap.full")
+    print(p)
     dev.off()
     
     # UMAP, only Ri01_dis highlighted ----
     seurat_obj$Ri01_5m <- seurat_obj$Sample == "Ri01_5m"
     Idents(seurat_obj) <- "Ri01_5m"
     pdf(file.path(results, "Ri01_5m_highlighted.pdf"))
-    
-    DimPlot(seurat_obj,
-            reduction = "umap.full",
-            order = TRUE,
-            alpha = 0.5,
-            cols = c("#f2f2f2", "#e60000"))
+    p <- DimPlot(seurat_obj,
+                 reduction = "umap.full",
+                 order = TRUE,
+                 alpha = 0.5,
+                 cols = c("#f2f2f2", "#e60000"))
+    print(p)
     dev.off()
     
     # UMAP, clone of interest ----

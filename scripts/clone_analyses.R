@@ -2,6 +2,7 @@
 # Libraries and setup ----
 
 library("argparse")
+library("ComplexHeatmap")
 library("ggplot2")
 library("tidyverse")
 library("Seurat")
@@ -28,6 +29,50 @@ filter_tcr_genes <- function(markers){
     markers %>%
         dplyr::filter(! grepl("^TR[ABG][VDJ]", gene))
 } 
+
+
+# purple_and_yellow ----
+purple_and_yellow <- function(disp.min = -2.5, disp.max = 2.5){
+    pp_yl <- (disp.max - disp.min)/49
+    pp_yl <- seq(disp.min, disp.max, by = pp_yl) 
+    pp_yl_pal <- circlize::colorRamp2(pp_yl, PurpleAndYellow())
+    return(pp_yl_pal)
+}
+
+# Heatmap ----
+heatmap_w_labs <- function(obj,
+                           col_labs = tcr_cat_to_label(),
+                           disp_min = -2.5,
+                           disp_max = 2.5,
+                           col_group = as.factor(obj$tcr_category),
+                           row_group = TRUE,
+                           column_title_gp = gpar(fontsize = 10),
+                           column_names_gp = gpar(fontsize = 10),
+                           row_names_gp = gpar(fontsize = 3),
+                           ...){
+    
+    pp_yl_pal <- purple_and_yellow(disp.min = disp_min, disp.max = disp_max) 
+    dat <- LayerData(obj, "scale.data")
+    
+    col_group <- col_labs[obj[[col_group]][,1]]
+    if (! isTRUE(row_group)) { 
+        row_group <- cluster_within_group(t(dat), row_group)
+    }
+    
+    Heatmap(dat,
+            cluster_columns = cluster_within_group(dat, col_group),
+            cluster_rows = row_group,
+            show_column_dend = FALSE,
+            show_row_dend = FALSE, 
+            column_split = length(unique(obj$tcr_category)),
+            column_title_gp = column_title_gp,
+            column_names_gp = column_names_gp, 
+            row_names_gp = row_names_gp,
+            column_labels = gsub("_.*", "", colnames(dat)),
+            col = pp_yl_pal,
+            heatmap_legend_param = list(title = "Scaled \nexpression"),
+            ...)
+}
 
 # Marker lists ----
 get_markers <- function(){
@@ -106,9 +151,22 @@ make_dotplots <- function(seurat_obj, results, marker_sets){
 }
 
 
+# Filter DE table ----
+filter_de <- function(de, max_n, pval_min = 0.05){
+    
+    n_sig <- sum(de$p_val_adj <= pval_min)
+    if (n_sig >= max_n){
+        de <- de %>%
+            dplyr::filter(p_val_adj <= pval_min) %>%
+            dplyr::arrange(desc(abs(avg_log2FC))) %>%
+            dplyr::slice_head(n = max_n)
+    }
+    de
+}
+
 # Make heatmaps with and without tcr gene filtering ----
 make_heatmaps <- function(obj, de, out_fname, max_n, remove_tcr = FALSE,
-                         pval_min = 0.05, wd = 7, ht = 7){
+                         pval_min = 0.05, wd = 7, ht = 7, ...){
     if (isTRUE(remove_tcr)){ 
         de <- filter_tcr_genes(de)
         out_fname <- gsub("(\\.pdf|\\.png)$", "_no_tcr(\\1)", out_fname)    
@@ -121,11 +179,12 @@ make_heatmaps <- function(obj, de, out_fname, max_n, remove_tcr = FALSE,
             dplyr::arrange(desc(abs(avg_log2FC))) %>%
             dplyr::slice_head(n = max_n)
     }
+
+    print(nrow(de))
     
-    # Default heatmap
     pdf(out_fname, width = wd, height = ht)
-    p <- DoHeatmap(obj, features = de$gene)
-    print(p)
+    h <- DoHeatmap(obj, features = de$gene, ...)
+    print(h)
     dev.off()
     
     # TO DO: custom heatmaps split by samples
@@ -142,29 +201,49 @@ run_diff_expr <- function(obj, results_dir, idents, ident_1, ident_2,
     
     # Run diff expr
     Idents(obj) <- obj[[idents]][, 1]
-    de <- FindMarkers(obj, ident.1 = ident_1, ident.2 = ident_2, ...)
+    de <- FindMarkers(obj, ident.1 = ident_1, ident.2 = ident_2, ...) %>%
+        dplyr::as_tibble(rownames = "gene") %>%
+        relocate(gene)
     
     # CSV of results
     write_csv(de, file.path(res_dir, "diff_expr_full.csv"))
     
     # Volcano of results
     pdf(file.path(res_dir, "volcano.pdf"))
+    volc_labels <- filter_de(de, 20) %>% dplyr::pull(gene)
     p <- volc_mod(de,
                   xlab = expression("Average " * log[2] * "FC"),
                   ylab = expression(-log[10]*"(adjusted p-value)"),
+                  labels = volc_labels,
+                  labelsFrom = "gene",
                   x = "avg_log2FC",
                   y = "p_val_adj")
     print(p)
     dev.off()
     
+    tryCatch({dev.off()}, error = function(e){return()})
+    
     # Heatmap
     heatmap_out <- file.path(res_dir, "heatmap.pdf")
-    make_heatmaps(obj, de, heatmap_out, max_n, pval_min, wd, ht)
+    print(heatmap_out)
+    make_heatmaps(obj, de, heatmap_out, max_n,
+                  pval_min, wd, ht, group.by = idents)
+    
+    # Customised heatmap
+    #pdf(file.path(res_dir, "heatmap_clustered.pdf"))
+    #h <- heatmap_w_labs(obj,
+    #                    col_labs = structure(levels(Idents(obj)),
+    #                                         names = levels(Idents(obj))), 
+    #                    col_group = idents, 
+    #                    row_group = FALSE)
+    #print(h)
+    #dev.off()
+    
     
     # Pseudobulk
-    obj_pseudo <- AggregateExpression(obj, by = c("sample", "beta_aa"))
-    de_pseudo <- FindMarkers(obj, ident.1 = ident_1, ident.2 = ident_2,
-                             test.use = "DeSeq2")
+    #obj_pseudo <- AggregateExpression(obj, by = c("sample", "beta_aa"))
+    #de_pseudo <- FindMarkers(obj, ident.1 = ident_1, ident.2 = ident_2,
+    #                         test.use = "DESeq2")
     
     
     # Dot plots for marker set H
@@ -175,12 +254,12 @@ run_diff_expr <- function(obj, results_dir, idents, ident_1, ident_2,
 
 # Filter clones for minimum number of cells ---- 
 clones_min_n <- function(md, min_cells = 5){
-    md %>%
+    keep_clones <- md %>%
         dplyr::group_by(Sample, beta_aa) %>%
         dplyr::summarise(n = n()) %>%
         dplyr::filter(n >= min_cells) %>%
-        # rownames are the cells 
-        rownames()
+        dplyr::select(-n)
+    md %>% semi_join(keep_clones)
 }
 
 # Get the cluster with the most clones of interest ----
@@ -226,34 +305,36 @@ main <- function(args, min_cells = 5, ...){
     write_rds(clones, file.path(dirname(args$seurat), "reactive_clones.rds"))
     
     clone_pseudo <- AggregateExpression(clones,
-                                        by = c("Sample", "beta_aa"),
-                                        return.seurat = FALSE)
+                                        group.by = c("Sample", "beta_aa"),
+                                        return.seurat = TRUE)
     write_rds(clones,
               file.path(dirname(args$seurat),
                         "reactive_clones_pseudobulk.rds"))
     
-
     # Differential expression -----
-    # CHECK NOT Ri_01 dis??
+    # USE Ri_01 dis, remove Ri_01 5m
     
     # Subset to just reactive clones, test HD v Ri
     rx <- subset(clones, reactive == "TRUE")
     run_de(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD")
     
     # Subset to Ri, test reactive verus non-reactive
+    # CHECK NOT Ri_01 dis??
     ri <- subset(clones, condition == "Ri")
     run_de(ri, "reactive", "TRUE", "FALSE", "Ri_rx_v_non_rx")
     
     # Subset to HD, test reactive verus non-reactive
     hd <- subset(clones, condition == "HD")
-    run_de(ri, "reactive", "TRUE", "FALSE", "HD_rx_v_non_rx")
+    run_de(hd, "reactive", "TRUE", "FALSE", "HD_rx_v_non_rx")
     
     # Reactive verus non-reactive, all_samples
     run_de(clones, "reactive", "TRUE", "FALSE", "all_samples_rx_v_non_rx")
     
     # Subset to cluster of interest, clones with at least min_cells
-    coi_cluster <- subset(seurat_object,
+    coi_cluster <- subset(seurat_obj,
                           seurat_clusters == coi_cluster)
+    keep_clones <- clones_min_n(coi_cluster[[]], min_cells)
+    
     
     # To do: subset by n cells
     

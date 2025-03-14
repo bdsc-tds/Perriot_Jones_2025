@@ -27,7 +27,7 @@ args <- parser$parse_args()
 # ----------------------------------------------------------------------------
 # Functions ----
 
-make_umap <- function(fname, reduction, group_by, width, height, ...){
+make_umap <- function(seurat_obj, fname, reduction, group_by, width, height, ...){
     pdf(fname, width = width, height = height)
     p <- DimPlot(seurat_obj,
                  reduction = reduction,
@@ -45,10 +45,15 @@ make_umaps <- function(seurat_obj,
                        height = 12){
     
     template <- file.path(fig_dir, "%s%s.pdf")
+    run_umap <- purrr::partial(make_umap,
+                               seurat_ob = seurat_obj, 
+                               reduction = reduction,
+                               width = width,
+                               height = height)
     
     dummy <- lapply(group_by, function(gp) {
-        make_umap(sprintf(template, gp, ""), reduction, gp, width, height)
-        make_umap(sprintf(template, gp, "_split"), reduction, gp, width, height,
+        run_umap(fname = sprintf(template, gp, ""), gp)
+        run_umap(fname = sprintf(template, gp, "_split"), gp,
                   split.by = gp, ncol = 4)
     })
     
