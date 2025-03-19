@@ -74,6 +74,60 @@ umap_coi <- function(meta, fig_dir){
 #print(p)
 #dev.off()
 
+make_umaps <- function(seurat_obj, results, condition){
+    # UMAP, colour and split by samples
+    Idents(seurat_obj) <- "Sample"
+    pdf(file.path(results, sprintf("samples_split_%s.pdf", condition)),
+        width = 12)
+    
+    p <- DimPlot(seurat_obj,
+                 reduction = "umap.full",
+                 split.by = "Sample")
+    print(p)
+    dev.off()
+    
+    # UMAP, colour by samples
+    Idents(seurat_obj) <- "Sample"
+    pdf(file.path(results, sprintf("samples_%s.pdf", condition)))
+    
+    p <- DimPlot(seurat_obj,
+                 reduction = "umap.full")
+    print(p)
+    dev.off()
+    
+    # UMAP, colour by clusters
+    Idents(seurat_obj) <- "seurat_clusters"
+    pdf(file.path(results, sprintf("clusters_%s.pdf", condition)))
+    
+    p <- DimPlot(seurat_obj,
+                 reduction = "umap.full")
+    print(p)
+    dev.off()
+    
+    # UMAP, colour by clusters, alternative palette
+    cluster_alphabet <- DiscretePalette(length(unique(
+        seurat_obj$seurat_clusters)))
+    Idents(seurat_obj) <- "seurat_clusters"
+    
+    pdf(file.path(results, sprintf("clusters_%s_alphabet_pal.pdf", condition)))
+    p <- DimPlot(seurat_obj,
+                 reduction = "umap.full",
+                 cols = cluster_alphabet)
+    print(p)
+    dev.off()
+    
+    # UMAP, clone of interest 
+    Idents(seurat_obj) <- "ri01_coi"
+    pdf(file.path(results, sprintf("ri01_clone_of_interest_%s.pdf", condition)))
+    
+    p <- DimPlot(seurat_obj,
+                 reduction = "umap.full",
+                 order = TRUE,
+                 cols = c("#f2f2f2", "#e60000"))
+    print(p)
+    dev.off()
+}
+
 # main ----
 main <- function(args){
     results <- file.path(args$results, "umap")
@@ -82,28 +136,20 @@ main <- function(args){
     seurat_obj <- read_rds(args$seurat)
     seurat_obj$ri01_coi <- seurat_obj$coi == "Ri01"
     
-    # UMAP all donors ----
-    Idents(seurat_obj) <- "Sample"
-    pdf(file.path(results, "samples_all_samples_all_cells.pdf"))
+    make_umaps(seurat_obj, results, "all_samples")
     
-    p <- DimPlot(seurat_obj,
-                 reduction = "umap.full",
-                 group.by = "Sample")
-    print(p)
-    dev.off()
-
-    # UMAP clusters, except Ri01_5m ----
+    # UMAPs excluding Ri01_5m 
     seurat_subs <- subset(seurat_obj, Sample != "Ri01_5m")
-    Idents(seurat_obj) <- "Sample"
-    pdf(file.path(results, "samples_excluding_Ri01_5m.pdf"))
-    p <- DimPlot(seurat_obj, reduction = "umap.full")
-    print(p)
-    dev.off()
+    make_umaps(seurat_subs, results, "excluding_Ri01_5m")
+    
+    # Just Ri01_dis
+    seurat_dis <- subset(seurat_obj, Sample == "Ri01_dis")
+    make_umaps(seurat_dis, results, "only_Ri01_dis")
     
     # UMAP, only Ri01_dis highlighted ----
-    seurat_obj$Ri01_5m <- seurat_obj$Sample == "Ri01_5m"
-    Idents(seurat_obj) <- "Ri01_5m"
-    pdf(file.path(results, "Ri01_5m_highlighted.pdf"))
+    seurat_obj$Ri01_dis <- seurat_obj$Sample == "Ri01_dis"
+    Idents(seurat_obj) <- "Ri01_dis"
+    pdf(file.path(results, "Ri01_dis_highlighted.pdf"))
     p <- DimPlot(seurat_obj,
                  reduction = "umap.full",
                  order = TRUE,
@@ -112,13 +158,14 @@ main <- function(args){
     print(p)
     dev.off()
     
-    # UMAP, clone of interest ----
-    Idents(seurat_obj) <- "ri01_coi"
-    pdf(file.path(results, "ri01_clone_of_interest_all_samples.pdf"))
     
+    seurat_obj$Ri01_5m <- seurat_obj$Sample == "Ri01_5m"
+    Idents(seurat_obj) <- "Ri01_5m"
+    pdf(file.path(results, "Ri01_5m_highlighted.pdf"))
     p <- DimPlot(seurat_obj,
                  reduction = "umap.full",
                  order = TRUE,
+                 alpha = 0.5,
                  cols = c("#f2f2f2", "#e60000"))
     print(p)
     dev.off()

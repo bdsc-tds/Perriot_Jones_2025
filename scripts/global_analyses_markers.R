@@ -69,9 +69,10 @@ make_dotplot <- function(seurat_obj, markers, out_fname,
                  scale = scale,
                  features = Features(seurat_obj)) + 
         coord_flip() +
-        scale_color_gradient2(low="lightgray",
-                              mid="#E1C7C2",
-                              high="#e60000") +
+        scale_color_viridis_c() +
+        #scale_color_gradient2(low="lightgray",
+        #                      mid="#E1C7C2",
+        #                      high="#e60000") +
         labs(y = NULL, x = NULL) +
         theme(panel.grid = element_line(color = "gray")) +
         guides(size = guide_legend(title = "Percent\nExpressed"),
