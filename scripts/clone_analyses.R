@@ -332,23 +332,43 @@ run_diff_expr <- function(obj, results_dir, idents, ident_1, ident_2,
     
     # Heatmap
     heatmap_out <- file.path(res_dir, "heatmap.pdf")
-    print(heatmap_out)
-    
+
     make_heatmaps(obj = obj, de = de, idents = idents, out_fname = heatmap_out,
                   max_n = max_n, pval_min = pval_min, wd = wd, ht = ht,
                   group.by = idents)
-    
-    # Pseudobulk
-    #obj_pseudo <- AggregateExpression(obj, by = c("sample", "beta_aa"))
-    #de_pseudo <- FindMarkers(obj, ident.1 = ident_1, ident.2 = ident_2,
-    #                         test.use = "DESeq2")
-    
     
     # Dot plots for marker set H
     make_dotplots(obj, res_dir, markers)
     
     return(de)
 }
+
+
+run_diff_expr_pb <- function(obj, results_dir, idents, ident_1, ident_2,
+                             name, markers = get_markers(), max_n = 100,
+                             pval_min = 0.05, wd = 7, ht = 7, ...){
+    res_dir <- file.path(results_dir, name)
+    if (! file.exists(res_dir)) { dir.create(res_dir, recursive = TRUE) }
+    
+    pseudo <- make_pseudobulk(obj, idents)
+    
+    # Run diff expr
+    Idents(pseudo) <- pseudo[[idents]][, 1]
+    de <- FindMarkers(pseudo, ident.1 = ident_1, ident.2 = ident_2, 
+                      test.use = "DESeq2", ...) %>%
+        dplyr::as_tibble(rownames = "gene") %>%
+        dplyr::mutate("comparison" = name) %>%
+        relocate(gene, comparison)
+    
+    # CSV of results
+    write_csv(de, file.path(res_dir, "diff_expr_pseudo_full.csv"))
+    
+    de <- filter_tcr_genes(de)
+    write_csv(de, file.path(res_dir, "diff_expr_pseudo_rm_tcr.csv"))
+    
+    return(de)
+}
+
 
 # Filter clones for minimum number of cells ---- 
 clones_min_n <- function(md, min_cells = 5){
@@ -395,6 +415,7 @@ main <- function(args, min_cells = 5, ...){
     # Setup ---- 
     if (! file.exists(args$results)) { 
         dir.create(args$results, recursive = TRUE)
+        dir.create(file.path(args$results, "condition_by_reactivity"))
     }
     
     seurat_obj <- read_rds(args$seurat)
@@ -412,6 +433,8 @@ main <- function(args, min_cells = 5, ...){
                          relationship = "many-to-one")
 
     coi_cluster_id <- get_cluster_coi(seurat_obj[[]])
+    
+    # Write table of counts per cluster 
     cluster_counts_table(seurat_obj[[]] %>%
                              dplyr::filter(seurat_clusters == coi_cluster_id),
                       file.path(args$results,
@@ -419,11 +442,13 @@ main <- function(args, min_cells = 5, ...){
                                         coi_cluster_id)))
     
     run_de <- purrr::partial(run_diff_expr, results = args$results, ...)
+    run_pseudo <- purrr::partial(run_diff_expr_pb, results = args$results, ...)
     
     # Subset to clones where reactivity information is known
     clones <- subset(seurat_obj, reactive %in% c(TRUE, FALSE))
     write_rds(clones, file.path(dirname(args$seurat), "reactive_clones.rds"))
     
+    # Write table of reactive counts
     clones_counts_table(clones[[]],
                         file.path(args$results, "reactive_clone_counts.csv"))
     
@@ -439,36 +464,52 @@ main <- function(args, min_cells = 5, ...){
 
     # Subset to just reactive clones, test HD v Ri
     rx <- subset(clones_wo_5m, reactive == "TRUE")
-    cnd_de <- run_de(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD")
+    #cnd_de <- run_de(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD")
+    cnd_de_pb <- run_pseudo(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD_pseudo")
     
     # Subset to Ri, test reactive verus non-reactive
     ri <- subset(clones_wo_5m, condition == "Ri")
-    ri_de <- run_de(ri, "reactive_lab",
-                    "Reactive", "Non-reactive", "Ri_rx_v_non_rx")
+    #ri_de <- run_de(ri, "reactive_lab",
+    #                "Reactive", "Non-reactive", "Ri_rx_v_non_rx")
+    ri_de_pb <- run_pseudo(ri, "reactive_lab",
+                           "Reactive", "Non-reactive", "Ri_rx_v_non_rx_pseudo")
     
     # Subset to HD, test reactive verus non-reactive
     hd <- subset(clones_wo_5m, condition == "HD")
-    hd_de <- run_de(hd, "reactive_lab",
-                    "Reactive", "Non-reactive", "HD_rx_v_non_rx")
+    #hd_de <- run_de(hd, "reactive_lab",
+    #                "Reactive", "Non-reactive", "HD_rx_v_non_rx")
+    hd_de_pb <- run_pseudo(hd, "reactive_lab",
+                          "Reactive", "Non-reactive", "HD_rx_v_non_rx_pseudo")
     
     # Reactive verus non-reactive, all_samples
-    rx_dr <- run_de(clones_wo_5m, "reactive_lab",
-                    "Reactive", "Non-reactive",
-                    "all_samples_rx_v_non_rx")
+    #rx_dr <- run_de(clones_wo_5m, "reactive_lab",
+    #                "Reactive", "Non-reactive",
+    #                "all_samples_rx_v_non_rx")
+    rx_dr_pb <- run_pseudo(clones_wo_5m, "reactive_lab",
+                           "Reactive", "Non-reactive",
+                           "all_samples_rx_v_non_rx")
     
     # Reactive by condition ----
     clones_wo_5m[[]] <- clones_wo_5m[[]] %>%
         dplyr::mutate(rx_by_cnd = paste(condition, reactive, sep = "_"))
     Idents(clones_wo_5m) <- "rx_by_cnd"
+    
     one_v_all_de <- FindAllMarkers(clones_wo_5m)
     write_csv(one_v_all_de,
-              file.path(args$results, "de_condition_by_reactivity.csv"))
+              file.path(args$results, "condition_by_reactivity/de_full.csv"))
     make_heatmaps(clones_wo_5m, one_v_all_de, "rx_by_cnd",
                   max_n = 100, remove_tcr = TRUE,
                   out_fname = 
                       file.path(args$results,
-                                "heatmap_de_condition_by_reactivity.pdf"))
+                                "condition_by_reactivity/heatmap.pdf"))
     
+    clones_wo_5m_pb <- make_pseudobulk(clones_wo_5m, "rx_by_cnd")
+    one_v_all_de_pb <- FindAllMarkers(clones_wo_5m_pb, test.use = "DESeq2")
+    write_csv(one_v_all_de_pb,
+              file.path(args$results,
+                        "condition_by_reactivity/de_full_pseudobulk.csv"))
+    
+        
     # Subset to cluster of interest, clones with at least min_cells ----
     coi_cluster <- subset(clones_wo_5m,
                           seurat_clusters == coi_cluster_id)
@@ -477,6 +518,14 @@ main <- function(args, min_cells = 5, ...){
                           cells = rownames(keep_clones))
     cl2_de <- run_de(coi_cluster, "condition", "Ri", "HD",
                      sprintf("clones_cluster_%s_Ri_v_HD", coi_cluster_id))
+    
+    coi_cluster_pb <- make_pseudobulk(coi_cluster, "condition")
+    coi_cluster_de_pb <- FindAllMarkers(coi_cluster_pb, test.use = "DESeq2")
+    write_csv(coi_cluster_de_pb,
+              file.path(args$results,
+                        sprintf("clones_cluster_%s_Ri_v_HD_pseudobulk",
+                                coi_cluster_id)))
+    
 }
 
 # ----------------------------------------------------------------------------
