@@ -2,6 +2,7 @@
 # Libraries and setup ----
 
 library("argparse")
+library("ComplexHeatmap")
 library("ggplot2")
 library("tidyverse")
 library("Seurat")
@@ -46,6 +47,61 @@ get_markers <- function(){
                "CXCR6", "CCR7", "S1PR1", "SELL")
          )
 }
+
+purple_and_yellow <- function(disp.min = -2.5, disp.max = 2.5){
+    pp_yl <- (disp.max - disp.min)/49
+    pp_yl <- seq(disp.min, disp.max, by = pp_yl) 
+    pp_yl_pal <- circlize::colorRamp2(pp_yl, PurpleAndYellow())
+    return(pp_yl_pal)
+}
+
+
+heatmap_w_labs <- function(obj,
+                           col_group,
+                           col_labs = NULL,
+                           disp_min = -2.5,
+                           disp_max = 2.5,
+                           row_group = FALSE,
+                           column_title_gp = gpar(fontsize = 10),
+                           column_names_gp = gpar(fontsize = 10),
+                           row_names_gp = gpar(fontsize = 3),
+                           ...){
+    print("in heatmap w labs")
+    pp_yl_pal <- purple_and_yellow(disp.min = disp_min, disp.max = disp_max) 
+    dat <- LayerData(obj, "scale.data")
+    
+    if (is.null(col_labs)) {
+        temp <- unique(as.character(obj[[col_group]][,1]))
+        col_labs <- structure(temp, names = temp)
+    }
+    
+    print(col_labs)
+    print(head(obj[[col_group]][,1], n = 20))
+    
+    col_group <- col_labs[as.character(obj[[col_group]][,1])]
+    print(head(col_group))
+    print(unique(col_group))
+    
+    if (! isTRUE(row_group) & ! isFALSE(row_group)) { 
+        row_group <- cluster_within_group(t(dat), row_group)
+    }
+    
+    Heatmap(dat,
+            cluster_columns = cluster_within_group(dat, col_group),
+            cluster_rows = row_group,
+            show_column_dend = FALSE,
+            show_row_dend = FALSE, 
+            column_split = length(unique(col_group)),
+            column_title_gp = column_title_gp,
+            column_names_gp = column_names_gp, 
+            row_names_gp = row_names_gp,
+            column_labels = gsub("_.*", "", colnames(dat)),
+            col = pp_yl_pal,
+            heatmap_legend_param = list(title = "Scaled \nexpression"),
+            ...)
+}
+
+
 
 # Heatmap of cluster markers ----
 make_heatmap <- function(seurat_obj, markers, out_fname,
@@ -110,15 +166,41 @@ main <- function(args){
         marker_subset <- ScaleData(marker_subset, features = markers)
         Idents(marker_subset) <- as.numeric(marker_subset$seurat_clusters)
 
-        make_dotplot(marker_subset, markers,
-                     sprintf(template, "dotplot_unscaled", out_nm),
-                     scale = FALSE)
-        make_dotplot(marker_subset, markers,
-                     sprintf(template, "dotplot_scaled", out_nm),
-                     scale = TRUE)
-        make_heatmap(marker_subset, markers,
-                     sprintf(template, "heatmap", out_nm))
+        #make_dotplot(marker_subset, markers,
+        #             sprintf(template, "dotplot_unscaled", out_nm),
+        #             scale = FALSE)
+        #make_dotplot(marker_subset, markers,
+        #             sprintf(template, "dotplot_scaled", out_nm),
+        #             scale = TRUE)
+        #make_heatmap(marker_subset, markers,
+        #             sprintf(template, "heatmap", out_nm))
         
+        # Clustered heatmaps, only Ri01_5m
+        tryCatch({
+            ri01_5m <- subset(marker_subset, Sample == "Ri01_5m")
+            print(dim(ri01_5m))
+            pdf(sprintf(template, "heatmap_ri01_5m", out_nm),
+                width = 10)
+            h <- heatmap_w_labs(ri01_5m,
+                                col_group = "seurat_clusters",
+                                row_names_gp = gpar(fontsize = 8),
+                                show_column_names = FALSE)
+            print(h)
+            dev.off()
+            
+        }, error = function(e){return()})
+        
+        # Clustered heatmaps, all samples except Ri01_5m
+        tryCatch({
+            dis <- subset(marker_subset, Sample != "Ri01_5m")
+            h <- heatmap_w_labs(dis, col_group = "seurat_clusters",
+                                row_names_gp = gpar(fontsize = 8),
+                                show_column_names = FALSE)
+            pdf(sprintf(template, "heatmap_excluding_ri01_5m", out_nm),
+                width = 10)
+            print(h)
+            dev.off()
+        }, error = function(e){return()})
     }
 }
 
