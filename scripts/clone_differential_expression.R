@@ -416,6 +416,7 @@ main <- function(args, min_cells = 5, ...){
     if (! file.exists(args$results)) { 
         dir.create(args$results, recursive = TRUE)
         dir.create(file.path(args$results, "condition_by_reactivity"))
+        dir.create(file.path(args$results, "tables"))
     }
     
     seurat_obj <- read_rds(args$seurat)
@@ -438,7 +439,7 @@ main <- function(args, min_cells = 5, ...){
     cluster_counts_table(seurat_obj[[]] %>%
                              dplyr::filter(seurat_clusters == coi_cluster_id),
                       file.path(args$results,
-                                sprintf("clone_counts_cl_%s.csv",
+                                sprintf("tabels/clone_counts_cl_%s.csv",
                                         coi_cluster_id)))
     
     run_de <- purrr::partial(run_diff_expr, results = args$results, ...)
@@ -450,7 +451,8 @@ main <- function(args, min_cells = 5, ...){
     
     # Write table of reactive counts
     clones_counts_table(clones[[]],
-                        file.path(args$results, "reactive_clone_counts.csv"))
+                        file.path(args$results,
+                                  "tables/reactive_clone_counts.csv"))
     
     # Differential expression -----
     clones_wo_5m <- subset(clones, Sample != "Ri01_5m")
@@ -523,7 +525,7 @@ main <- function(args, min_cells = 5, ...){
     coi_cluster_de_pb <- FindAllMarkers(coi_cluster_pb, test.use = "DESeq2")
     write_csv(coi_cluster_de_pb,
               file.path(args$results,
-                        sprintf("clones_cluster_%s_Ri_v_HD_pseudobulk",
+                        sprintf("tables/clones_cluster_%s_Ri_v_HD_pseudobulk",
                                 coi_cluster_id)))
     
 }

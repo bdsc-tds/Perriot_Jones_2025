@@ -48,6 +48,7 @@ get_markers <- function(){
          )
 }
 
+# purple and yellow palette ----
 purple_and_yellow <- function(disp.min = -2.5, disp.max = 2.5){
     pp_yl <- (disp.max - disp.min)/49
     pp_yl <- seq(disp.min, disp.max, by = pp_yl) 
@@ -55,7 +56,7 @@ purple_and_yellow <- function(disp.min = -2.5, disp.max = 2.5){
     return(pp_yl_pal)
 }
 
-
+# heatmap w labs ----
 heatmap_w_labs <- function(obj,
                            col_group,
                            col_labs = NULL,
@@ -126,9 +127,6 @@ make_dotplot <- function(seurat_obj, markers, out_fname,
                  features = Features(seurat_obj)) + 
         coord_flip() +
         scale_color_viridis_c() +
-        #scale_color_gradient2(low="lightgray",
-        #                      mid="#E1C7C2",
-        #                      high="#e60000") +
         labs(y = NULL, x = NULL) +
         theme(panel.grid = element_line(color = "gray")) +
         guides(size = guide_legend(title = "Percent\nExpressed"),
