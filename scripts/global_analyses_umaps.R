@@ -23,58 +23,11 @@ get_markers <- function(){
       "CXCR3", "IL2RB", "PRF1", "GZMB")
 }
 
-# UMAP clone of interest ----
-umap_coi <- function(meta, fig_dir){
-    meta$is_coi = c(2, 0.5)[as.numeric(meta$coi == "no") + 1]
-    meta <- meta %>%
-        dplyr::mutate(coi = factor(coi, levels = c("no", "Ri01", "Ri02"))) %>%
-        dplyr::arrange(coi) %>%
-        dplyr::mutate(coi = as.character(coi))
-    
-    coi_colours <- structure(c("lightgray","#DC050C","steelblue"),
-                             names = c("no", "Ri01", "Ri02"))
-    
-    pdf(file.path(fig_dir, "umap_coi.pdf"),
-        height = 12, width = 12)
-    p <- ggplot(meta, 
-                aes(x = umap_1, y = umap_2)) +
-        geom_point(aes(size = is_coi, colour = coi)) +
-        scale_size_identity() +
-        theme_minimal(base_size = 15) +
-        scale_color_manual(labels = names(coi_colours), values = coi_colours) +
-        labs(x = "UMAP dimension 1", y = "UMAP dimension 2") +
-        theme(panel.grid.major = element_blank(),
-              panel.grid.minor = element_blank())
-    print(p)
-    dev.off()
-}
-
-
-#feature_plot <- function(out_fname, markers = get_markers(),
-# width = 8, height =){
-#    
-#}
-
-## UMAP of cluster markers ----
-#ht <- ifelse(marker_nm == "A_bis", 7, 16)
-#pdf(file.path(args$results, sprintf("marker_%s_umap.pdf", marker_nm)),
-#    width = 8, height = ht)
-#p <- FeaturePlot(marker_subset,
-#                 features = markers$Gene,
-#                 keep.scale = "all",
-#                 alpha = 0.5,
-#                 cols = c("#f2f2f2", "#ffae00", "#811818"),
-#                 order = TRUE) +
-#    plot_layout(guides = "collect") &
-#    theme(axis.line = element_blank(),
-#          axis.title = element_blank(),
-#          axis.text = element_blank(),
-#          axis.ticks = element_blank()) &
-#    labs(color = "log2 Exp")
-#print(p)
-#dev.off()
-
-make_umaps <- function(seurat_obj, results, condition){
+make_umaps <- function(seurat_obj,
+                       results,
+                       condition,
+                       gray = "#CCCCCC",
+                       pt.size = 1.5){
     # UMAP, colour and split by samples
     Idents(seurat_obj) <- "Sample"
     pdf(file.path(results, sprintf("samples_split_%s.pdf", condition)),
@@ -82,7 +35,8 @@ make_umaps <- function(seurat_obj, results, condition){
     
     p <- DimPlot(seurat_obj,
                  reduction = "umap.full",
-                 split.by = "Sample")
+                 split.by = "Sample") +
+        labs(x = "UMAP 1", y = "UMAP 2")
     print(p)
     dev.off()
     
@@ -91,7 +45,8 @@ make_umaps <- function(seurat_obj, results, condition){
     pdf(file.path(results, sprintf("samples_%s.pdf", condition)))
     
     p <- DimPlot(seurat_obj,
-                 reduction = "umap.full")
+                 reduction = "umap.full") +
+        labs(x = "UMAP 1", y = "UMAP 2")
     print(p)
     dev.off()
     
@@ -100,7 +55,8 @@ make_umaps <- function(seurat_obj, results, condition){
     pdf(file.path(results, sprintf("clusters_%s.pdf", condition)))
     
     p <- DimPlot(seurat_obj,
-                 reduction = "umap.full")
+                 reduction = "umap.full") +
+        labs(x = "UMAP 1", y = "UMAP 2")
     print(p)
     dev.off()
     
@@ -112,7 +68,8 @@ make_umaps <- function(seurat_obj, results, condition){
     pdf(file.path(results, sprintf("clusters_%s_alphabet_pal.pdf", condition)))
     p <- DimPlot(seurat_obj,
                  reduction = "umap.full",
-                 cols = cluster_alphabet)
+                 cols = cluster_alphabet) +
+        labs(x = "UMAP 1", y = "UMAP 2")
     print(p)
     dev.off()
     
@@ -123,7 +80,10 @@ make_umaps <- function(seurat_obj, results, condition){
     p <- DimPlot(seurat_obj,
                  reduction = "umap.full",
                  order = TRUE,
-                 cols = c("#f2f2f2", "#e60000"))
+                 cols = c(gray, "#e60000"),
+                 pt.size = pt.size) +
+        labs(x = "UMAP 1", y = "UMAP 2") +
+        guides(color = "none")
     print(p)
     dev.off()
 }
@@ -135,7 +95,7 @@ main <- function(args){
     
     seurat_obj <- read_rds(args$seurat)
     seurat_obj$ri01_coi <- seurat_obj$coi == "Ri01"
-    
+
     make_umaps(seurat_obj, results, "all_samples")
     
     # UMAPs excluding Ri01_5m 
@@ -154,11 +114,12 @@ main <- function(args){
                  reduction = "umap.full",
                  order = TRUE,
                  alpha = 0.5,
-                 cols = c("#f2f2f2", "#e60000"))
+                 cols = c("#CCCCCC", "#e60000"))  +
+        labs(x = "UMAP 1", y = "UMAP 2")
     print(p)
     dev.off()
     
-    
+    # UMAP, only Ri01_dis highlighted ----
     seurat_obj$Ri01_5m <- seurat_obj$Sample == "Ri01_5m"
     Idents(seurat_obj) <- "Ri01_5m"
     pdf(file.path(results, "Ri01_5m_highlighted.pdf"))
@@ -166,7 +127,8 @@ main <- function(args){
                  reduction = "umap.full",
                  order = TRUE,
                  alpha = 0.5,
-                 cols = c("#f2f2f2", "#e60000"))
+                 cols = c("#CCCCCC", "#e60000")) +
+        labs(x = "UMAP 1", y = "UMAP 2")
     print(p)
     dev.off()
     

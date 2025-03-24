@@ -175,15 +175,11 @@ make_dotplots <- function(seurat_obj, results, marker_sets){
 # Filter DE table ----
 # This is used for selecting genes to highlight on volcano plots
 filter_de <- function(de, max_n, pval_min = 0.05){
-    
-    print("in filter de")
     n_sig <- sum(de$p_val_adj <= pval_min)
-    if (n_sig >= max_n){
-        de <- de %>%
-            dplyr::filter(p_val_adj <= pval_min) %>%
-            dplyr::arrange(desc(abs(avg_log2FC))) %>%
-            dplyr::slice_head(n = max_n)
-    }
+    de <- de %>%
+        dplyr::filter(p_val_adj <= pval_min) %>%
+        dplyr::arrange(desc(abs(avg_log2FC))) %>%
+        dplyr::slice_head(n = min(max_n, n_sig))
     de
 }
 
@@ -227,8 +223,11 @@ write_top_genes <- function(de, obj, res_dir, pval_min, fc_cutoff = 0.25){
 
 # make volcano ----
 make_volcano <- function(de, res_dir, n_labs = 20){
-    pdf(file.path(res_dir, "volcano.pdf"))
+    print(filter_de(de, n_labs))
     volc_labels <- filter_de(de, n_labs) %>% dplyr::pull(gene)
+    print("n_volc_labels")
+    print(length(volc_labels))
+    pdf(file.path(res_dir, "volcano.pdf"))
     p <- volc_mod(de,
                   xlab = expression("Average " * log[2] * "FC"),
                   ylab = expression(-log[10]*"(adjusted p-value)"),
@@ -240,7 +239,7 @@ make_volcano <- function(de, res_dir, n_labs = 20){
     dev.off()
 }
 
-# Make heatmaps with and without tcr gene filtering ----
+# Make heatmaps ----
 make_heatmaps <- function(obj, de, idents, out_fname, max_n, remove_tcr = FALSE,
                          pval_min = 0.05, wd = 7, ht = 7, ...){
     if (isTRUE(remove_tcr)){ 
@@ -249,11 +248,20 @@ make_heatmaps <- function(obj, de, idents, out_fname, max_n, remove_tcr = FALSE,
     }
 
     n_sig <- sum(de$p_val_adj <= pval_min)
-    
-    if (n_sig >= max_n){
+    # If there aren't enough differentially expressed genes, ignore p_val cutoff
+    if (n_sig > max_n){
         de <- de %>%
-            dplyr::filter(p_val_adj <= pval_min) %>%
-            dplyr::arrange(desc(abs(avg_log2FC))) %>%
+            dplyr::filter(p_val_adj <= pval_min)
+    }
+    
+    if (nrow(de) >= max_n){
+         de <- de%>%
+            dplyr::mutate(pval_sig = p_val_adj <= pval_min,
+                          pval_sig = factor(pval_sig, levels = c("TRUE", "FALSE")) ) %>%
+            # Keep the significant genes if there are any
+            dplyr::arrange(pval_sig, desc(abs(avg_log2FC)))
+         print(head(de))
+         de <- de %>%
             dplyr::slice_head(n = max_n)
     }
     
@@ -325,9 +333,8 @@ run_diff_expr <- function(obj, results_dir, idents, ident_1, ident_2,
     make_volcano(de, res_dir, n_labs = 20)
         
     # CSV of gene expression
-    write_top_genes(de, obj, res_dir, pval_min, fc_cutoff = 0.5)
-    return() ######
-    
+    write_top_genes(de, obj, res_dir, pval_min, fc_cutoff = 0.1)
+
     tryCatch({dev.off()}, error = function(e){return()})
     
     # Heatmap
@@ -464,26 +471,26 @@ main <- function(args, min_cells = 5, ...){
                       reactive_lab = case_when(reactive == "TRUE" ~ "Reactive",
                                                reactive == "FALSE" ~ "Non-reactive"))
 
-    # Subset to just reactive clones, test HD v Ri
+    # Subset to just reactive clones, test HD v Ri ----
     rx <- subset(clones_wo_5m, reactive == "TRUE")
     #cnd_de <- run_de(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD")
     cnd_de_pb <- run_pseudo(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD_pseudo")
     
-    # Subset to Ri, test reactive verus non-reactive
+    # Subset to Ri, test reactive verus non-reactive ----
     ri <- subset(clones_wo_5m, condition == "Ri")
     #ri_de <- run_de(ri, "reactive_lab",
     #                "Reactive", "Non-reactive", "Ri_rx_v_non_rx")
     ri_de_pb <- run_pseudo(ri, "reactive_lab",
                            "Reactive", "Non-reactive", "Ri_rx_v_non_rx_pseudo")
     
-    # Subset to HD, test reactive verus non-reactive
+    # Subset to HD, test reactive verus non-reactive ----
     hd <- subset(clones_wo_5m, condition == "HD")
     #hd_de <- run_de(hd, "reactive_lab",
     #                "Reactive", "Non-reactive", "HD_rx_v_non_rx")
     hd_de_pb <- run_pseudo(hd, "reactive_lab",
                           "Reactive", "Non-reactive", "HD_rx_v_non_rx_pseudo")
     
-    # Reactive verus non-reactive, all_samples
+    # Reactive verus non-reactive, all_samples ----
     #rx_dr <- run_de(clones_wo_5m, "reactive_lab",
     #                "Reactive", "Non-reactive",
     #                "all_samples_rx_v_non_rx")
@@ -527,6 +534,13 @@ main <- function(args, min_cells = 5, ...){
               file.path(args$results,
                         sprintf("tables/clones_cluster_%s_Ri_v_HD_pseudobulk",
                                 coi_cluster_id)))
+    
+    # Clone of interest, disease versus remission ----
+    coi <- subset(seurat_obj, coi == "Ri01")
+    
+    coi_de <- run_de(coi, "Sample",
+                    "Ri01_dis", "Ri01_5m", "Ri01_dis_v_5m")
+    
     
 }
 

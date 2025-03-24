@@ -164,6 +164,7 @@ main <- function(args){
         marker_subset <- ScaleData(marker_subset, features = markers)
         Idents(marker_subset) <- as.numeric(marker_subset$seurat_clusters)
 
+        # All samples together ----
         #make_dotplot(marker_subset, markers,
         #             sprintf(template, "dotplot_unscaled", out_nm),
         #             scale = FALSE)
@@ -172,6 +173,26 @@ main <- function(args){
         #             scale = TRUE)
         #make_heatmap(marker_subset, markers,
         #             sprintf(template, "heatmap", out_nm))
+        
+        # Only Ri01_dis ----
+        ri01_dis <- subset(marker_subset, Sample == "Ri01_dis")
+        make_dotplot(ri01_dis, markers,
+                     sprintf(template, "Ri01_dis_dotplot_unscaled", out_nm),
+                     scale = FALSE)
+        make_dotplot(ri01_dis, markers,
+                     sprintf(template, "Ri01_dis_dotplot_scaled", out_nm),
+                     scale = TRUE)
+
+        # All samples except Ri01_5m -----
+        not_ri01_5m <- subset(marker_subset, Sample != "Ri01_5m")
+        make_dotplot(not_ri01_5m, markers,
+                     sprintf(template,
+                             "not_Ri01_5m_dotplot_unscaled", out_nm),
+                     scale = FALSE)
+        make_dotplot(not_ri01_5m, markers,
+                     sprintf(template,
+                             "not_Ri01_5m_dotplot_scaled", out_nm),
+                     scale = TRUE)
         
         # Clustered heatmaps, only Ri01_5m
         tryCatch({

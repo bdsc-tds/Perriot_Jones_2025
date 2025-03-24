@@ -19,8 +19,25 @@ parser$add_argument('--workdir',
 args <- parser$parse_args()
 
 source(file.path(args$workdir, "scripts/markers_sp1.R"))
+source(file.path(args$workdir, "scripts/funcs_custom_heatmaps.R"))
 
 # ----------------------------------------------------------------------------
+# Make pseudobulk ----
+make_pseudobulk <- function(obj, idents){
+    gp_by = unique(c("Sample", "beta_aa", idents))
+    clone_pseudo <- AggregateExpression(obj,
+                                        group.by = gp_by,
+                                        return.seurat = TRUE)
+    
+    data_layer <- LayerData(clone_pseudo, "data")
+    na_col <- apply(data_layer, 2, function(x) all(is.na(x)))
+    data_layer[, names(na_col)[na_col]] <- 0
+    LayerData(clone_pseudo, "data") <- data_layer
+    clone_pseudo <- ScaleData(clone_pseudo, features = Features(clone_pseudo))
+    Idents(clone_pseudo) <- idents
+    return(clone_pseudo)
+}
+
 
 # Marker lists ----
 get_markers <- function(){
@@ -139,6 +156,49 @@ main <- function(args){
         janitor::clean_names() %>%
         dplyr::rename(gene = features_plot) %>%
         readr::write_csv(file.path(args$results, "tables/markers_1_sp_expr.csv"))
+    
+    # Heatmap of expression for list 1_SP ----
+    ht <- 12
+
+        results <- file.path(args$results, "sp_heatmap")
+    if (! file.exists(results)) { dir.create(results, recursive = TRUE) }
+    
+    pdf(file.path(results, "unclustered.pdf"), height = ht)
+    h <- DoHeatmap(sp_obj,
+                   features = Features(sp_obj),
+                   group.by = "rx_by_cnd") +
+        theme(axis.text.y = element_text(size = 1))
+    print(h)
+    dev.off()
+    
+    pdf(file.path(results, "clustered.pdf"), height = ht)
+    h <- heatmap_w_labs(sp_obj,
+                        col_group = "rx_by_cnd", 
+                        row_group = FALSE,
+                        show_column_names = FALSE,
+                        row_names_gp = gpar(fontsize = 1))
+    print(h)
+    dev.off()
+    
+    # Pseudobulk heatmap ----
+    clone_pseudo <- make_pseudobulk(sp_obj, "rx_by_cnd")
+    
+    pdf(file.path(results, "pseudobulk_unclustered.pdf"), height = ht) 
+    h <- DoHeatmap(clone_pseudo,
+                   features = Features(sp_obj),
+                   group.by = "rx_by_cnd") +
+        theme(axis.text.y = element_text(size = 1))
+    print(h)
+    dev.off()
+    
+    pdf(file.path(results, "pseudobulk_clustered.pdf"), height = ht)
+    h <- heatmap_w_labs(clone_pseudo,
+                        col_group = "rx_by_cnd", 
+                        row_group = FALSE,
+                        row_names_gp = gpar(fontsize = 1),
+                        column_names_gp = gpar(fontsize = 6))
+    print(h)
+    dev.off()
 }
 
 
