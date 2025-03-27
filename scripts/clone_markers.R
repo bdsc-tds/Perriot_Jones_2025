@@ -38,7 +38,6 @@ make_pseudobulk <- function(obj, idents){
     return(clone_pseudo)
 }
 
-
 # Marker lists ----
 get_markers <- function(){
     list("A_bis" = c("CCR7", "TCF7", "SELL", "BCL2", "CD27",
@@ -95,10 +94,10 @@ main <- function(args){
     results <- file.path(args$results, "dotplots")
     if (! file.exists(results)) { dir.create(results, recursive = TRUE) }
     
+    marker_sets <- get_markers()
+    
     seurat_obj <- read_rds(args$clones)
     seurat_obj <- subset(seurat_obj, Sample != "Ri01_5m")
-    
-    marker_sets <- get_markers()
     
     seurat_obj[[]] <- seurat_obj[[]] %>%
         dplyr::mutate(condition = case_when(condition == "Ri01_dis" ~ "Ri",
@@ -136,6 +135,55 @@ main <- function(args){
                      sprintf(template, "dotplot_scaled_no_5m", out_nm),
                      scale = TRUE)
     }
+    
+    # Average expression for reactivity x condition ----
+    tested <- subset(seurat_obj, reactive == TRUE | reactive == FALSE)
+    
+    Idents(tested) <- "rx_by_cnd"
+    avg <- AverageExpression(tested, assays = "RNA")[["RNA"]] %>%
+        as_tibble(rownames = "gene")
+    rx_res <- file.path(args$results,
+                        "tables/reactivity_by_condition_avg_expr.csv")
+    write_csv(avg, rx_res)
+    
+    # Average expression for clones ----
+    Idents(tested) <- "tcr_name"
+    avg <- AverageExpression(tested, assays = "RNA")[["RNA"]] %>%
+        as_tibble(rownames = "gene") 
+    colnames(avg) <- gsub("-", "_", colnames(avg))
+    clone_res <- file.path(args$results,
+                        "tables/tested_clones_avg_expr.csv")
+    write_csv(avg, clone_res)
+    
+    # UMAP for clones ----
+    umap_res <- file.path(args$results, "umap")
+
+    if (! file.exists(umap_res)) { dir.create(umap_res, recursive = TRUE) }
+    
+    tested <- FindVariableFeatures(tested)
+    tested <- ScaleData(tested)
+    tested <- RunPCA(tested)
+    
+    pdf(file.path(umap_res, "pca_dim_red.pdf"), width = 10, height = 20)
+    p <- DimHeatmap(tested, dims = 1:15, balanced = TRUE)
+    print(p)
+    dev.off()
+    
+    pdf(file.path(umap_res, "elbow.pdf"))
+    p <- ElbowPlot(tested)
+    print(p)
+    dev.off()
+    
+    tested <- RunUMAP(tested, assay = "RNA", dims = 1:15)
+    
+    pdf(file.path(umap_res, "umap.pdf"))
+    p <- DimPlot(tested, group.by = "rx_by_cnd") +
+        labs(x = "UMAP 1", y = "UMAP 2", title = NULL)
+    print(p)
+    dev.off()
+    
+    #de_genes <- read_csv()
+    
     
     # Average expression and percentage of cells expressing list 1_SP ----
     sp <- markers_1_sp()

@@ -241,7 +241,7 @@ make_volcano <- function(de, res_dir, n_labs = 20){
 
 # Make heatmaps ----
 make_heatmaps <- function(obj, de, idents, out_fname, max_n, remove_tcr = FALSE,
-                         pval_min = 0.05, wd = 7, ht = 7, ...){
+                          pseudobulk = TRUE, pval_min = 0.05, wd = 7, ht = 7, ...){
     if (isTRUE(remove_tcr)){ 
         de <- filter_tcr_genes(de)
         out_fname <- gsub("(\\.pdf|\\.png)$", "_no_tcr\\1", out_fname)    
@@ -285,6 +285,8 @@ make_heatmaps <- function(obj, de, idents, out_fname, max_n, remove_tcr = FALSE,
                         row_group = FALSE)
     print(h)
     dev.off()
+    
+    if (isFALSE(pseudobulk)) return()
     
     # Pseudobulk heatmap ----
     clone_pseudo <- make_pseudobulk(obj_subs, idents)
@@ -331,6 +333,10 @@ run_diff_expr <- function(obj, results_dir, idents, ident_1, ident_2,
     
     # Volcano of results
     make_volcano(de, res_dir, n_labs = 20)
+    
+    ###########
+    # Stopping, just regenerating volcano
+    return() #############
         
     # CSV of gene expression
     write_top_genes(de, obj, res_dir, pval_min, fc_cutoff = 0.1)
@@ -350,7 +356,7 @@ run_diff_expr <- function(obj, results_dir, idents, ident_1, ident_2,
     return(de)
 }
 
-
+# run_diff_expr_pb ----
 run_diff_expr_pb <- function(obj, results_dir, idents, ident_1, ident_2,
                              name, markers = get_markers(), max_n = 100,
                              pval_min = 0.05, wd = 7, ht = 7, ...){
@@ -372,6 +378,11 @@ run_diff_expr_pb <- function(obj, results_dir, idents, ident_1, ident_2,
     
     de <- filter_tcr_genes(de)
     write_csv(de, file.path(res_dir, "diff_expr_pseudo_rm_tcr.csv"))
+    
+    make_heatmaps(pseudo, de, idents,
+                  out_fname = file.path(res_dir("heatmap_pseudobulk_de.pdf")),
+                  max_n,
+                  pseudobulk = FALSE)
     
     return(de)
 }
@@ -476,14 +487,14 @@ main <- function(args, min_cells = 5, ...){
     #cnd_de <- run_de(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD")
     cnd_de_pb <- run_pseudo(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD_pseudo")
     
-    # Subset to Ri, test reactive verus non-reactive ----
+    # Subset to Ri, test reactive versus non-reactive ----
     ri <- subset(clones_wo_5m, condition == "Ri")
     #ri_de <- run_de(ri, "reactive_lab",
     #                "Reactive", "Non-reactive", "Ri_rx_v_non_rx")
     ri_de_pb <- run_pseudo(ri, "reactive_lab",
                            "Reactive", "Non-reactive", "Ri_rx_v_non_rx_pseudo")
     
-    # Subset to HD, test reactive verus non-reactive ----
+    # Subset to HD, test reactive versus non-reactive ----
     hd <- subset(clones_wo_5m, condition == "HD")
     #hd_de <- run_de(hd, "reactive_lab",
     #                "Reactive", "Non-reactive", "HD_rx_v_non_rx")

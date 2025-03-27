@@ -48,23 +48,34 @@ main <- function(args){
     de <- FindAllMarkers(seurat_obj)
     write_csv(de, file.path(results, "de_full.csv"))
     
-    #pdf(file.path(results, "pca_genes.pdf"), width = 10, height = 10)
-    #plots <- lapply(1:16, function(i){
-    #    DimHeatmap(seurat_obj, dims = i, cells = 500, balanced = TRUE)
-    #})
-    #wrap_plots(plots)
-    #dev.off()
+    pdf(file.path(results, "pca_genes.pdf"), width = 10, height = 10)
+    DefaultAssay(seurat_obj) <- "sketch"
+    p <- DimHeatmap(seurat_obj, dims = 1:15, cells = 500, balanced = TRUE)
+    print(p)
+    dev.off()
+    
+    png(file.path(results, "pca_genes.png"), height = 800, width = 800, res = 500)
+    print(p)
+    dev.off()
+    
+    DefaultAssay(seurat_obj) <- "RNA"
     
     cluster_de <- filter_top(de)
     write_csv(cluster_de, file.path(results, "de_genes_in_heatmap.csv"))
     
     seurat_obj <- ScaleData(seurat_obj, features = cluster_de$gene)
     pdf(file.path(results, "heatmap.pdf"), height = 10, width = 10)
-    p <- DoHeatmap(seurat_obj, features = cluster_de$gene,
+    hm <- DoHeatmap(seurat_obj, features = cluster_de$gene,
                    size = 2, angle = 0) +
         theme(axis.text = element_text(size = 4))
-    print(p)
+    print(hm)
     dev.off()
+    
+    png(file.path(results, "heatmap.png"), width = 6, height = 6, units = "in",
+        res = 300)
+    print(hm)
+    dev.off()
+    
     
     # Cluster DE, pseudobulk
     
