@@ -1,13 +1,24 @@
 library("ComplexHeatmap")
 
+palette_steps <- function(disp.min, disp.max, n_steps = 49){
+    steps <- (disp.max - disp.min)/n_steps
+    steps <- seq(disp.min, disp.max, by = steps) 
+    return(steps)
+}
+
 # purple_and_yellow ----
 purple_and_yellow <- function(disp.min = -2.5, disp.max = 2.5){
-    pp_yl <- (disp.max - disp.min)/49
-    pp_yl <- seq(disp.min, disp.max, by = pp_yl) 
-    pp_yl_pal <- circlize::colorRamp2(pp_yl, PurpleAndYellow())
+    steps <- palette_steps(disp.min = disp.min, disp.max = disp.min)
+    pp_yl_pal <- circlize::colorRamp2(steps, PurpleAndYellow())
     return(pp_yl_pal)
 }
 
+blue_and_yellow <- function(disp.min = -2.5, disp.max = 2.5){
+    bu_yl <- c("#0C7BDC", "#2E73CA", "#7E6C6E", "#B28808", "#FFC20A")
+    steps <- palette_steps(disp.min, disp.max, n_steps = 4)
+    bu_yl_pal <- circlize::colorRamp2(steps, bu_yl)
+    return(bu_yl_pal)
+}
 
 heatmap_w_labs <- function(obj,
                            col_group,

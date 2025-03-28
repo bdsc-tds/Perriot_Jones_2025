@@ -14,8 +14,6 @@ parser$add_argument('--seurat', '-s',
                     help = 'Seurat object')
 parser$add_argument('--results',  '-f', 
                     help = 'Directory for saving results')
-parser$add_argument('--markers',  '-m', 
-                    help = 'csv with markers to plot')
 args <- parser$parse_args()
 
 

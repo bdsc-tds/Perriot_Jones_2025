@@ -43,34 +43,6 @@ beta_aa <- function(md){
                       beta_aa = paste(TCR2, CTaa2, sep = "_")) 
 }
 
-# Make shortened ID column vj_aa ----
-vj_aa <- function(md){
-    temp <- md %>%
-        dplyr::select(TCR1, TCR2, CTaa1, CTaa2) %>%
-        # This section will fail if there aren't the same number of alpha and beta
-        dplyr::mutate(across(c(TCR1, TCR2, CTaa1, CTaa2), ~strsplit(.x, ";")),
-                      id = 1:n()) %>%
-        tidyr::unnest(c(TCR1, TCR2, CTaa1, CTaa2)) %>%
-        tidyr::separate_wider_delim(cols = c(TCR1, TCR2),
-                                    delim = '.', names_sep = "_") %>%
-        dplyr::mutate(beta_vj_aa = paste(TCR2_1, TCR2_3, CTaa2, sep = "."),
-                      alpha_vj_aa = paste(TCR1_1, TCR1_2, CTaa1, sep = "."),
-                      vj_aa = paste(alpha_vj_aa, beta_vj_aa, sep = "_")) %>%
-        dplyr::select(id, vj_aa) %>% 
-        dplyr::group_by(id) %>%
-        dplyr::mutate(row_n = 1:n()) %>%
-        dplyr::ungroup() %>%
-        tidyr::pivot_wider(names_from = "row_n",
-                           names_prefix = "tcr_",
-                           values_from = "vj_aa") %>%
-        # If there are multiple TCRs
-        tidyr::unite(col = vj_aa, tcr_1, tcr_2, sep = ";") %>%
-        dplyr::mutate(vj_aa = gsub(";NA$", "", vj_aa),
-                      vj_aa = na_if(vj_aa, "NA.NA.NA_NA.NA.NA")) %>%
-        dplyr::select(-id)
-    md <- md  %>% dplyr::bind_cols(temp)
-    return(md)
-}
 
 # tcr_presence ----
 tcr_presence <- function(md){
@@ -117,12 +89,6 @@ add_beta_aa <- function(seurat_obj){
     # Add vj_aa
     #seurat_obj[[]] <- vj_aa(seurat_obj[[]])
 }
-
-add_vj_aa <- function(seurat_obj){
-    # Add vj_aa
-    seurat_obj[[]] <- vj_aa(seurat_obj[[]])
-}
-
 
 # h5_to_seurat ----
 h5_to_seurat <- function(nm,
@@ -246,7 +212,6 @@ make_seurat <- function(args){
     # Read clone of interest
     source(args$coi)
     coi <- get_coi()
-    print(coi)
     
     # Check that sample names are the same as in the config file
     stopifnot(length(intersect(names(combined_tcr), samples)) ==
@@ -261,7 +226,6 @@ make_seurat <- function(args){
     # Add TCR information
     seurat_obj <- add_tcr_metadata(seurat_obj, combined_tcr)
     seurat_obj[[]] <- add_beta_aa(seurat_obj)
-    #seurat_obj <- add_vj_aa(seurat_obj)
     
     # Add CD8 expression status to metadata
     seurat_obj$CD8 <- cd8_expr(seurat_obj)

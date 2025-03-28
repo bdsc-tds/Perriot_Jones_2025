@@ -14,20 +14,9 @@ parser$add_argument('--results',  '-f',
 args <- parser$parse_args()
 
 source(file.path(args$workdir, "scripts/funcs_custom_heatmaps.R"))
+source(file.path(args$workdir, "scripts/markers_sp1.R"))
 
 # _______________________________________________________
-get_markers <- function(){
-    return(structure(
-        c("CD74", "HSPA8", "HSP90AA1", "HLA-DRB5", "HSP90AB1", "HSPA5", 
-          "TAP1", "IFI30", "TNF", "HLA-DMA", "IFNG", "HLA-DPB1", "HLA-DRA", 
-          "CALR", "HLA-DQA1", "HLA-DRB1", "HLA-DPA1", "HLA-DQB1", "CDKN1A", 
-          "SPI1", "ICAM1", "RELB", "ZFP36", "EGR1", "EGR2", "JUN", "MAP2K2", 
-          "TGFB1", "FOS", "NFKBIA", "VDAC2", "SLC25A5", "RAN", "MAP2K3", 
-          "GADD45B", "GADD45A", "TNFAIP3", "IRF7", "VIM", "CD44", "IRF9", 
-          "CSF1", "CCL3", "ATP6V0C", "RARA", "IL21R")))
-    
-}
-
 
 clones_min_n <- function(md, min_cells = 5){
     keep_clones <- md %>%
@@ -39,14 +28,13 @@ clones_min_n <- function(md, min_cells = 5){
 }
 
 
-
 main <- function(args){
     results <- file.path(args$results, "string")
     if (! file.exists(results)) { dir.create(results, recursive = TRUE) }
     
     wd <- 10
     ht <- 10
-    markers <- get_markers()
+    markers <- string_markers()
     
     seurat_obj <- read_rds(args$seurat)
     seurat_obj <- subset(seurat_obj, features = markers)

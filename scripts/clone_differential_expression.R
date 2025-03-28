@@ -23,9 +23,12 @@ parser$add_argument('--min_cells',  '-m', default = 5,
 args <- parser$parse_args()
 
 source(file.path(args$workdir, "scripts/funcs_EnhancedVolcano_mod.R"))
+source(file.path(args$workdir, "scripts/markers_sp1.R"))
 
 # ----------------------------------------------------------------------------
 
+# make_pseudobulk - wrapper with corrections for when a category has no counts
+# for any gene ----
 make_pseudobulk <- function(obj, idents){
     gp_by = unique(c("Sample", "beta_aa", idents))
     clone_pseudo <- AggregateExpression(obj,
@@ -95,36 +98,6 @@ heatmap_w_labs <- function(obj,
             ...)
 }
 
-# Marker lists ----
-get_markers <- function(){
-    list("NK-like" = 
-             c("KLRC1", "KLRC2", "KLRG1", "KLRK1", "KIR2DL1", "KIR2DL2", "KIR2DL3", 
-               "KIR2DL4", "KIR2DS1", "KIR2DS2", "KIR2DS3", "KIR2DS4", "KIR3DL1", 
-               "KIR3DL2", "KIR3DS1", "KIR3DS2"),
-         "Activation" = 
-             c("CX3CR1", "TFRC", "HLA-DRA", "HLA-DRB1", "IL2RA", "IL2RB", 
-               "CD44", "ITK", "NFATC2", "NFKB1", "NME1", "CD27", "CD28",
-               "ICOS", "CD40LG", "TNFRSF4", "TNFRSF9"),
-         "Effector function/Cytoxicity" = 
-             c("FASLG", "IFNG", "TNF", "PRF1", "GZMA", "GZMB", "GZMK", "GZMM"),
-         "Exhaustion" = 
-             c("PDCD1", "HAVCR2", "LAG3", "CTLA4", "TIGIT", "CD244", "CD160", 
-               "TOX", "EOMES", "BATF", "TBX21", "NR4A1", "PRDM1", "ENTPD1"),
-         "NK-like" = 
-             c("KLRC1", "KLRC2", "KLRG1", "KLRK1", "KIR2DL1", "KIR2DL2", "KIR2DL3", 
-               "KIR2DL4", "KIR2DS1", "KIR2DS2", "KIR2DS3", "KIR2DS4", "KIR3DL1", 
-               "KIR3DL2", "KIR3DS1", "KIR3DS2"),
-         "Proliferation/survival" = 
-             c("MCM2", "MCM3", "MCM4", "MCM5", "MCM6", "MYBL2", "MYC", "CDK1", 
-               "CDK2", "CDK4", "CDK6", "CCNA1", "CCNB1", "CCND1", "CCND2", "CCND3", 
-               "CCNE1", "E2F1", "FOXM1", "BUB1", "TOP2A", "MKI67", "PCNA", "PLK1", 
-               "BCL2", "BCL6", "TCF7"),
-         "Tissue residency/migration" =
-             c("CD69", "ITGA1", "ITGA4", "ITGAE", "CXCR3", "CXCR4", "CCR5", 
-               "CXCR6", "CCR7", "S1PR1", "SELL")
-    )
-}
-
 # Make single dotplot ----  
 make_dotplot <- function(seurat_obj, markers, out_fname,
                          ht = 5, scale = TRUE){
@@ -135,9 +108,6 @@ make_dotplot <- function(seurat_obj, markers, out_fname,
                  features = Features(seurat_obj)) + 
         coord_flip() +
         scale_color_viridis_c() +
-        #scale_color_gradient2(low="lightgray",
-        #                      mid="#E1C7C2",
-        #                      high="#e60000") +
         labs(y = NULL, x = NULL) +
         theme(panel.grid = element_line(color = "gray")) +
         guides(size = guide_legend(title = "Percent\nExpressed"),
@@ -170,17 +140,6 @@ make_dotplots <- function(seurat_obj, results, marker_sets){
                      sprintf(template, "dotplot_scaled", out_nm),
                      scale = TRUE)
     }
-}
-
-# Filter DE table ----
-# This is used for selecting genes to highlight on volcano plots
-filter_de <- function(de, max_n, pval_min = 0.05){
-    n_sig <- sum(de$p_val_adj <= pval_min)
-    de <- de %>%
-        dplyr::filter(p_val_adj <= pval_min) %>%
-        dplyr::arrange(desc(abs(avg_log2FC))) %>%
-        dplyr::slice_head(n = min(max_n, n_sig))
-    de
 }
 
 # write top genes ----
@@ -222,17 +181,11 @@ write_top_genes <- function(de, obj, res_dir, pval_min, fc_cutoff = 0.25){
 }
 
 # make volcano ----
-make_volcano <- function(de, res_dir, n_labs = 20){
-    print(filter_de(de, n_labs))
-    volc_labels <- filter_de(de, n_labs) %>% dplyr::pull(gene)
-    print("n_volc_labels")
-    print(length(volc_labels))
+make_volcano <- function(de, res_dir){
     pdf(file.path(res_dir, "volcano.pdf"))
     p <- volc_mod(de,
                   xlab = expression("Average " * log[2] * "FC"),
                   ylab = expression(-log[10]*"(adjusted p-value)"),
-                  labels = volc_labels,
-                  labelsFrom = "gene",
                   x = "avg_log2FC",
                   y = "p_val_adj")
     print(p)
@@ -311,7 +264,7 @@ make_heatmaps <- function(obj, de, idents, out_fname, max_n, remove_tcr = FALSE,
 
 # Run differential expression analyses ----
 run_diff_expr <- function(obj, results_dir, idents, ident_1, ident_2,
-                          name, markers = get_markers(), max_n = 100,
+                          name, markers = functional_markers(), max_n = 100,
                           pval_min = 0.05, wd = 7, ht = 7, ...){
     res_dir <- file.path(results_dir, name)
     if (! file.exists(res_dir)) { dir.create(res_dir, recursive = TRUE) }
@@ -332,11 +285,7 @@ run_diff_expr <- function(obj, results_dir, idents, ident_1, ident_2,
     write_csv(de, file.path(res_dir, "diff_expr_rm_tcr.csv"))
     
     # Volcano of results
-    make_volcano(de, res_dir, n_labs = 20)
-    
-    ###########
-    # Stopping, just regenerating volcano
-    return() #############
+    make_volcano(de, res_dir)
         
     # CSV of gene expression
     write_top_genes(de, obj, res_dir, pval_min, fc_cutoff = 0.1)
@@ -358,7 +307,7 @@ run_diff_expr <- function(obj, results_dir, idents, ident_1, ident_2,
 
 # run_diff_expr_pb ----
 run_diff_expr_pb <- function(obj, results_dir, idents, ident_1, ident_2,
-                             name, markers = get_markers(), max_n = 100,
+                             name, markers = functional_markers(), max_n = 100,
                              pval_min = 0.05, wd = 7, ht = 7, ...){
     res_dir <- file.path(results_dir, name)
     if (! file.exists(res_dir)) { dir.create(res_dir, recursive = TRUE) }
@@ -453,7 +402,7 @@ main <- function(args, min_cells = 5, ...){
 
     coi_cluster_id <- get_cluster_coi(seurat_obj[[]])
     
-    # Write table of counts per cluster 
+    # Write table of counts per cluster ---- 
     cluster_counts_table(seurat_obj[[]] %>%
                              dplyr::filter(seurat_clusters == coi_cluster_id),
                       file.path(args$results,
@@ -467,10 +416,36 @@ main <- function(args, min_cells = 5, ...){
     clones <- subset(seurat_obj, reactive %in% c(TRUE, FALSE))
     write_rds(clones, file.path(dirname(args$seurat), "reactive_clones.rds"))
     
-    # Write table of reactive counts
+    # Write table of reactive counts ----
     clones_counts_table(clones[[]],
                         file.path(args$results,
                                   "tables/reactive_clone_counts.csv"))
+    
+    # Write a table of cluster counts for clones from cluster of interest ----
+    cl_clones <- seurat_obj[[]] %>%
+        dplyr::filter(seurat_clusters == coi_cluster_id) %>%
+        dplyr::select(Sample, beta_aa) %>%
+        unique()
+    cl_clusters <- seurat_obj[[]] %>%
+        dplyr::inner_join(cl_clones, relationship = "many-to-one") %>%
+        dplyr::group_by(Sample, beta_aa, tcr_name) %>%
+        dplyr::mutate(n_clone = n()) %>%
+        dplyr::group_by(Sample, beta_aa, tcr_name, seurat_clusters, n_clone) %>%
+        dplyr::summarise(n_clone_cluster = n()) %>%
+        dplyr::arrange(desc(n_clone), Sample, beta_aa)
+    
+    write_csv(cl_clusters,
+              file.path(args$results,
+                        sprintf("tables/clusters_with_cells_in_cl_%s.csv",
+                                coi_cluster_id)))
+    
+    write_csv(cl_clusters %>%
+                   tidyr::pivot_wider(names_from = seurat_clusters,
+                                      values_from = n_clone_cluster),
+              file.path(args$results,
+                        sprintf("tables/clusters_with_cells_in_cl_%s_wide.csv",
+                                coi_cluster_id)))
+    
     
     # Differential expression -----
     clones_wo_5m <- subset(clones, Sample != "Ri01_5m")
@@ -484,27 +459,27 @@ main <- function(args, min_cells = 5, ...){
 
     # Subset to just reactive clones, test HD v Ri ----
     rx <- subset(clones_wo_5m, reactive == "TRUE")
-    #cnd_de <- run_de(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD")
+    cnd_de <- run_de(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD")
     cnd_de_pb <- run_pseudo(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD_pseudo")
     
     # Subset to Ri, test reactive versus non-reactive ----
     ri <- subset(clones_wo_5m, condition == "Ri")
-    #ri_de <- run_de(ri, "reactive_lab",
-    #                "Reactive", "Non-reactive", "Ri_rx_v_non_rx")
+    ri_de <- run_de(ri, "reactive_lab",
+                    "Reactive", "Non-reactive", "Ri_rx_v_non_rx")
     ri_de_pb <- run_pseudo(ri, "reactive_lab",
                            "Reactive", "Non-reactive", "Ri_rx_v_non_rx_pseudo")
     
     # Subset to HD, test reactive versus non-reactive ----
     hd <- subset(clones_wo_5m, condition == "HD")
-    #hd_de <- run_de(hd, "reactive_lab",
-    #                "Reactive", "Non-reactive", "HD_rx_v_non_rx")
+    hd_de <- run_de(hd, "reactive_lab",
+                    "Reactive", "Non-reactive", "HD_rx_v_non_rx")
     hd_de_pb <- run_pseudo(hd, "reactive_lab",
                           "Reactive", "Non-reactive", "HD_rx_v_non_rx_pseudo")
     
     # Reactive verus non-reactive, all_samples ----
-    #rx_dr <- run_de(clones_wo_5m, "reactive_lab",
-    #                "Reactive", "Non-reactive",
-    #                "all_samples_rx_v_non_rx")
+    rx_dr <- run_de(clones_wo_5m, "reactive_lab",
+                    "Reactive", "Non-reactive",
+                    "all_samples_rx_v_non_rx")
     rx_dr_pb <- run_pseudo(clones_wo_5m, "reactive_lab",
                            "Reactive", "Non-reactive",
                            "all_samples_rx_v_non_rx")
