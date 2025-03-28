@@ -26,12 +26,15 @@ heatmap_w_labs <- function(obj,
                            disp_min = -2.5,
                            disp_max = 2.5,
                            row_group = FALSE,
+                           palette = NULL,
                            column_title_gp = gpar(fontsize = 10),
                            column_names_gp = gpar(fontsize = 10),
                            row_names_gp = gpar(fontsize = 3),
                            ...){
-    print("in heatmap w labs")
-    pp_yl_pal <- purple_and_yellow(disp.min = disp_min, disp.max = disp_max) 
+    if (is.null(palette)){
+        palette <- purple_and_yellow(disp.min = disp_min, disp.max = disp_max) 
+    }
+    
     dat <- LayerData(obj, "scale.data")
     
     if (is.null(col_labs)) {
@@ -55,7 +58,7 @@ heatmap_w_labs <- function(obj,
             column_names_gp = column_names_gp, 
             row_names_gp = row_names_gp,
             column_labels = gsub("_.*", "", colnames(dat)),
-            col = pp_yl_pal,
+            col = palette,
             heatmap_legend_param = list(title = "Scaled \nexpression"),
             ...)
 }
