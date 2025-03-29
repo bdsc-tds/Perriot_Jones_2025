@@ -8,6 +8,8 @@ library("scales")
 library("Seurat")
 library("ComplexHeatmap")
 library("khroma")
+library("viridis")
+library("RColorBrewer")
 
 # Command line arguments ----
 parser <- ArgumentParser(description = "Differential expression analyses")
@@ -28,11 +30,78 @@ source(file.path(args$workdir, "scripts/funcs_custom_heatmaps.R"))
 # ----------------------------------------------------------------------------
 # Functions ----
 
+# cluster_heatmap ----
+cluster_heatmap <- function(pseudo_cl, markers, palette = blue_and_yellow()){
+    dat <- LayerData(pseudo_cl, "scale.data")
+    anno <- markers$cat_label[match(Features(pseudo_cl), markers$gene)]
+    cats <- unique(anno) 
+    row_ha = rowAnnotation(Category = anno,
+                           col = list(Category = 
+                                          structure(color("light")(length(cats)),
+                                                    names = cats)),
+                           show_legend = c(FALSE),
+                           show_annotation_name = FALSE)
+    
+    h <- Heatmap(dat,
+            cluster_columns = TRUE,
+            show_column_dend = FALSE,
+            show_row_dend = FALSE, 
+            column_title_gp = gpar(fontsize = 10),
+            column_names_gp = gpar(fontsize = 10),
+            row_names_gp = gpar(fontsize = 7),
+            row_split = length(unique(anno)),
+            row_title_gp = gpar(fontsize = 7.4),
+            column_labels = gsub("g", "", colnames(dat)),
+            col = palette,
+            heatmap_legend_param = list(title = "Scaled \nexpression"),
+            left_annotation = row_ha,
+            cluster_rows = cluster_within_group(t(dat), anno),
+            column_names_rot = 0)
+    return(h)
+}
+
+# reactivity heatmap ----
+rx_heatmap <- function(pseudo_cat, markers, palette = blue_and_yellow()) {
+    anno <- markers$cat_label[match(Features(pseudo_cl), markers$gene)]
+    cats <- unique(anno) 
+    row_ha <- rowAnnotation(Category = anno,
+                           col = list(Category = 
+                                          structure(color("light")(length(cats)),
+                                                    names = cats)),
+                           show_legend = c(FALSE),
+                           show_annotation_name = FALSE)
+    
+    Heatmap(LayerData(pseudo_cat, "scale.data"), 
+            cluster_columns = TRUE,
+            show_column_dend = FALSE,
+            show_row_dend = FALSE, 
+            column_title_gp = gpar(fontsize = 10),
+            row_names_gp = gpar(fontsize = 7),
+            column_names_gp = gpar(fontsize = 7),
+            row_split = length(unique(anno)),
+            row_title_gp = gpar(fontsize = 7.4),
+            column_labels = unique(pseudo_cat$orig.ident),
+            col = palette,
+            heatmap_legend_param = list(title = "Scaled \nexpression"),
+            left_annotation = row_ha,
+            cluster_rows = cluster_within_group(t(dat), anno),
+            column_names_rot = 45,
+            row_gap = unit(2, "mm"))
+}
+
 # main ----
 main <- function(args){
     results <- file.path(args$results, "heatmaps_fig_4_5")
     if (! file.exists(results)) { dir.create(results, recursive = TRUE) }
-
+    bu_yl_dir <- file.path(results, "blue_and_yellow")
+    if (! file.exists(bu_yl_dir)) { dir.create(bu_yl_dir) }
+    viridis_dir <- file.path(results, "viridis")
+    if (! file.exists(viridis_dir)) { dir.create(viridis_dir) }
+    bu_yl_rd_dir <- file.path(results, "blue_yellow_red")
+    if (! file.exists(bu_yl_rd_dir)) { dir.create(bu_yl_rd_dir) }
+    
+    bu_yl_rd_pal <- rev(brewer.pal(n = 7, name = "RdYlBu"))
+    
     markers <- read_csv(file.path(args$workdir,
                                   "data/processed/gene_lists_4_5.csv")) %>%
         dplyr::mutate(cat_label = gsub(" ", "\n", category),
@@ -55,39 +124,25 @@ main <- function(args){
     pseudo_cl <- AggregateExpression(seurat_subs,
                                      group.by = "seurat_clusters",
                                      return.seurat = TRUE)
-    #DoHeatmap(pseudo_cl, group.by = "seurat_clusters")
     
-    dat <- LayerData(pseudo_cl, "scale.data")
-    #pp_yl_pal <- purple_and_yellow(disp.min = -2.5, disp.max = 2.5) 
-    bu_yl_pal <- blue_and_yellow()
-    
-    anno <- markers$cat_label[match(Features(pseudo_cl), markers$gene)]
-    cats <- unique(anno) 
-    row_ha = rowAnnotation(Category = anno,
-                           col = list(Category = 
-                                          structure(color("light")(length(cats)),
-                                          names = cats)),
-                           show_legend = c(FALSE),
-                           show_annotation_name = FALSE)
-    
-    pdf(file.path(results, "category_by_cluster.pdf"),
+    pdf(file.path(bu_yl_dir, "category_by_cluster.pdf"),
         width = 5.3, height = 8)
-    Heatmap(dat,
-            cluster_columns = TRUE,
-            show_column_dend = FALSE,
-            show_row_dend = FALSE, 
-            column_title_gp = gpar(fontsize = 10),
-            column_names_gp = gpar(fontsize = 10),
-            row_names_gp = gpar(fontsize = 7),
-            row_split = length(unique(anno)),
-            row_title_gp = gpar(fontsize = 7.4),
-            column_labels = gsub("g", "", colnames(dat)),
-            col = bu_yl_pal, #pp_yl_pal,
-            heatmap_legend_param = list(title = "Scaled \nexpression"),
-            left_annotation = row_ha,
-            cluster_rows = cluster_within_group(t(dat), anno),
-            column_names_rot = 0)
+    h <- cluster_heatmap(pseudo_cl, markers)
+    print(h)
     dev.off()
+    
+    pdf(file.path(viridis_dir, "category_by_cluster.pdf"),
+        width = 5.3, height = 8)
+    h <- cluster_heatmap(pseudo_cl, markers, palette = viridis(100))
+    print(h)
+    dev.off()
+    
+    pdf(file.path(bu_yl_rd_dir, "category_by_cluster.pdf"),
+        width = 5.3, height = 8)
+    h <- cluster_heatmap(pseudo_cl, markers, palette = bu_yl_rd_pal)
+    print(h)
+    dev.off()
+    
     
     rm(seurat_subs)
     
@@ -114,24 +169,24 @@ main <- function(args){
                                       group.by = "rx_by_cnd",
                                       return.seurat = TRUE)
     
-    pdf(file.path(results, "category_by_reactivity.pdf"), width = 3, height = 8)
-    Heatmap(LayerData(pseudo_cat, "scale.data"), 
-            cluster_columns = TRUE,
-            show_column_dend = FALSE,
-            show_row_dend = FALSE, 
-            column_title_gp = gpar(fontsize = 10),
-            row_names_gp = gpar(fontsize = 7),
-            column_names_gp = gpar(fontsize = 7),
-            row_split = length(unique(anno)),
-            row_title_gp = gpar(fontsize = 7.4),
-            column_labels = unique(pseudo_cat$orig.ident),
-            col = bu_yl_pal, #pp_yl_pal,
-            heatmap_legend_param = list(title = "Scaled \nexpression"),
-            left_annotation = row_ha,
-            cluster_rows = cluster_within_group(t(dat), anno),
-            column_names_rot = 45,
-            row_gap = unit(2, "mm"))
+    pdf(file.path(bu_yl_dir, "category_by_reactivity.pdf"),
+        width = 3, height = 8)
+    h <- rx_heatmap(pseudo_cat, markers)
+    print(h)
     dev.off()
+    
+    pdf(file.path(viridis_dir, "category_by_reactivity.pdf"),
+        width = 3, height = 8)
+    h <- rx_heatmap(pseudo_cat, markers, palette = viridis(100))
+    print(h)
+    dev.off()
+    
+    pdf(file.path(bu_yl_rd_dir, "category_by_reactivity.pdf"),
+        width = 3, height = 8)
+    h <- rx_heatmap(pseudo_cat, markers, palette = bu_yl_rd_pal)
+    print(h)
+    dev.off()
+    
 }
 
 # ----------------------------------------------------------------------------
