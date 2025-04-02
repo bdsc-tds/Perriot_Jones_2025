@@ -21,8 +21,8 @@ blue_and_yellow <- function(disp.min = -2.5, disp.max = 2.5){
 }
 
 blue_white_yellow <- function(disp.min = -2.5, disp.max = 2.5){
-    bu_yl <- c("#0C7BDC", "#2E73CA", "#FFFFFF", "#B28808", "#FFC20A")
-    steps <- palette_steps(disp.min, disp.max, n_steps = 4)
+    bu_yl <- c("#0C7BDC", "#FFFFFF", "#FFC20A")
+    steps <- palette_steps(disp.min, disp.max, n_steps = 2)
     bu_yl_pal <- circlize::colorRamp2(steps, bu_yl)
     return(bu_yl_pal)
 }

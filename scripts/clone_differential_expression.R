@@ -24,7 +24,7 @@ args <- parser$parse_args()
 
 source(file.path(args$workdir, "scripts/funcs_EnhancedVolcano_mod.R"))
 source(file.path(args$workdir, "scripts/markers_sp1.R"))
-
+source(file.path(args$workdir, "scripts/clones_of_interest.R"))
 # ----------------------------------------------------------------------------
 
 # make_pseudobulk - wrapper with corrections for when a category has no counts
@@ -527,7 +527,26 @@ main <- function(args, min_cells = 5, ...){
     coi_de <- run_de(coi, "Sample",
                     "Ri01_dis", "Ri01_5m", "Ri01_dis_v_5m")
     
+    # Disease versus remission with additional clones of interest ----
+    coi_set <- coi_for_de()
+    coi_set <- sapply(coi_set, function(x) gsub("TRBJ02", "TRBJ2", x))
+    seurat_obj[[]] <- seurat_obj[[]] %>%
+        dplyr::mutate(coi_temp = paste(trbv, cdr3_aa_beta, trbj, sep = "_"))
     
+    ri01 <- subset(seurat_obj, coi_temp %in% coi_set &
+                   Sample %in% c("Ri01_dis", "Ri01_5m"))
+    ri01_data <- as.matrix(LayerData(ri01, assay = "RNA", layer = "data"))
+    ri01_metadata <- ri01[[]] %>%
+        as_tibble(rownames = "Cell") %>%
+        dplyr::select(Cell, Sample, coi_temp) %>%
+        write_csv(file.path(dirname(args$seurat), "ri01_cois_metadata.csv"))
+    
+    write_rds(ri01_data,
+              file.path(dirname(args$seurat), "ri01_cois.rds"))
+    
+    coi_de <- run_de(ri01, "Sample",
+                    "Ri01_dis", "Ri01_5m",
+                    "Ri01_dis_v_5m_clones_of_interest")
 }
 
 # ----------------------------------------------------------------------------
