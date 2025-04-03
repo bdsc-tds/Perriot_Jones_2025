@@ -13,6 +13,11 @@ purple_and_yellow <- function(disp.min = -2.5, disp.max = 2.5){
     return(pp_yl_pal)
 }
 
+
+blue_yellow_red <- function(){
+    return(rev(brewer.pal(n = 7, name = "RdYlBu")))
+}
+
 blue_and_yellow <- function(disp.min = -2.5, disp.max = 2.5){
     bu_yl <- c("#0C7BDC", "#2E73CA", "#7E6C6E", "#B28808", "#FFC20A")
     steps <- palette_steps(disp.min, disp.max, n_steps = 4)
@@ -22,6 +27,14 @@ blue_and_yellow <- function(disp.min = -2.5, disp.max = 2.5){
 
 blue_white_yellow <- function(disp.min = -2.5, disp.max = 2.5){
     bu_yl <- c("#0C7BDC", "#FFFFFF", "#FFC20A")
+    steps <- palette_steps(disp.min, disp.max, n_steps = 2)
+    bu_yl_pal <- circlize::colorRamp2(steps, bu_yl)
+    return(bu_yl_pal)
+}
+
+
+blue_white_orange <- function(disp.min = -2.5, disp.max = 2.5){
+    bu_yl <- c("#0C7BDC", "#FFFFFF", "darkorange")
     steps <- palette_steps(disp.min, disp.max, n_steps = 2)
     bu_yl_pal <- circlize::colorRamp2(steps, bu_yl)
     return(bu_yl_pal)

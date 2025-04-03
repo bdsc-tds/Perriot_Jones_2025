@@ -26,6 +26,7 @@ parser$add_argument('--workdir',  '-w',
 args <- parser$parse_args()
 
 source(file.path(args$workdir, "scripts/funcs_custom_heatmaps.R"))
+source(file.path(args$workdir, "scripts/markers_sp1.R"))
 
 # ----------------------------------------------------------------------------
 # Functions ----
@@ -61,46 +62,98 @@ cluster_heatmap <- function(pseudo_cl, markers, palette = blue_and_yellow()){
 }
 
 # reactivity heatmap ----
-rx_heatmap <- function(pseudo_cat, markers, palette = blue_and_yellow()) {
-    anno <- markers$cat_label[match(Features(pseudo_cl), markers$gene)]
+rx_heatmap <- function(pseudo_cat, markers, palette, ...) {
+    anno <- markers$cat_label[match(Features(pseudo_cat), markers$gene)]
     cats <- unique(anno) 
-    row_ha <- rowAnnotation(Category = anno,
-                           col = list(Category = 
-                                          structure(color("light")(length(cats)),
-                                                    names = cats)),
-                           show_legend = c(FALSE),
-                           show_annotation_name = FALSE)
+    dat <- LayerData(pseudo_cat, "scale.data")
     
-    Heatmap(LayerData(pseudo_cat, "scale.data"), 
-            cluster_columns = TRUE,
-            show_column_dend = FALSE,
-            show_row_dend = FALSE, 
-            column_title_gp = gpar(fontsize = 10),
-            row_names_gp = gpar(fontsize = 7),
-            column_names_gp = gpar(fontsize = 7),
-            row_split = length(unique(anno)),
-            row_title_gp = gpar(fontsize = 7.4),
-            column_labels = unique(pseudo_cat$orig.ident),
-            col = palette,
-            heatmap_legend_param = list(title = "Scaled \nexpression"),
-            left_annotation = row_ha,
-            cluster_rows = cluster_within_group(t(dat), anno),
-            column_names_rot = 45,
-            row_gap = unit(2, "mm"))
+    if (length(cats) == 1){
+        cluster_rows <- TRUE
+        row_split <- NULL
+        row_ha <- NULL
+    } else {
+        cluster_rows <- cluster_within_group(t(dat), anno)
+        row_split <- length(cats)
+        row_ha <- rowAnnotation(Category = anno,
+                                col = list(Category = 
+                                               structure(color("light")(length(cats)),
+                                                         names = cats)),
+                                show_legend = c(FALSE),
+                                show_annotation_name = FALSE)
+    }
+    
+    heatmap_args <- list(matrix = dat,
+                         col = palette,
+                         cluster_columns = TRUE,
+                         show_column_dend = FALSE,
+                         show_row_dend = FALSE, 
+                         column_title_gp = gpar(fontsize = 10),
+                         row_names_gp = gpar(fontsize = 7),
+                         column_names_gp = gpar(fontsize = 7),
+                         row_split = row_split,
+                         row_title_gp = gpar(fontsize = 7.4),
+                         column_labels = unique(pseudo_cat$orig.ident),
+                         heatmap_legend_param = list(title = "Scaled \nexpression"),
+                         left_annotation = row_ha,
+                         cluster_rows = cluster_rows,
+                         column_names_rot = 45,
+                         row_gap = unit(2, "mm"))
+    
+    heatmap_args <- modifyList(heatmap_args, list(...))
+    
+    return(do.call(Heatmap, heatmap_args))
+}
+
+# reactivity analyses for single marker set ----
+rx_marker_set <- function(clones,
+                          markers,
+                          palettes,
+                          group_by = "rx_by_cnd",
+                          name = "category_by_reactivity.pdf",
+                          width = 3,
+                          height = 8,
+                          ...){
+    
+    clones <- subset(all_clones,
+                     Sample != "Ri01_5m",
+                     features = markers$gene)
+    
+    pseudo_cat <- AggregateExpression(clones,
+                                      group.by = group_by,
+                                      return.seurat = TRUE)
+    
+    dummy <- lapply(names(palettes), function(pal_dir){
+        print(file.path(pal_dir, name))
+        pdf(file.path(pal_dir, name), width = width, height = height)
+        h <- rx_heatmap(pseudo_cat, markers, palette = palettes[[pal_dir]], ...)
+        print(h)
+        dev.off()
+    })
+}
+
+# palettes ----
+palettes <- function(results){
+    palettes <- list("blue_and_yellow" = blue_and_yellow(),
+                     "viridis" = viridis(100),
+                     "blue_yellow_red" = blue_yellow_red(),
+                     "blue_white_yellow" = blue_white_yellow(),
+                     "blue_white_orange" = blue_white_orange())
+    
+    names(palettes) <- file.path(results, names(palettes))
+    
+    dummy <- lapply(names(palettes), function(nm){
+        if (! file.exists(nm)) { dir.create(nm) }
+    })
+
+    return(palettes)
 }
 
 # main ----
 main <- function(args){
     results <- file.path(args$results, "heatmaps_fig_4_5")
     if (! file.exists(results)) { dir.create(results, recursive = TRUE) }
-    bu_yl_dir <- file.path(results, "blue_and_yellow")
-    if (! file.exists(bu_yl_dir)) { dir.create(bu_yl_dir) }
-    viridis_dir <- file.path(results, "viridis")
-    if (! file.exists(viridis_dir)) { dir.create(viridis_dir) }
-    bu_yl_rd_dir <- file.path(results, "blue_yellow_red")
-    if (! file.exists(bu_yl_rd_dir)) { dir.create(bu_yl_rd_dir) }
     
-    bu_yl_rd_pal <- rev(brewer.pal(n = 7, name = "RdYlBu"))
+    palettes <- palettes(results) 
     
     markers <- read_csv(file.path(args$workdir,
                                   "data/processed/gene_lists_4_5.csv")) %>%
@@ -121,6 +174,16 @@ main <- function(args){
     seurat_subs <- read_rds("data/processed/one_tcr_beta/fig_4_5_subset.rds")
     
     # Aggregate across clusters ----
+    
+    # to do: test
+    rx_marker_set(seurat_subs, 
+                  markers,
+                  palettes,
+                  group_by = "seurat_clusters",
+                  name = "category_by_reactivity.pdf",
+                  width = 5.3, height = 8)
+    
+    
     pseudo_cl <- AggregateExpression(seurat_subs,
                                      group.by = "seurat_clusters",
                                      return.seurat = TRUE)
@@ -146,11 +209,10 @@ main <- function(args){
     
     rm(seurat_subs)
     
-    # Aggregate across reactivity categories 
+    # Aggregate across reactivity categories ----
     
     #clones <- read_rds("data/processed/one_tcr_beta/reactive_clones.rds")
     clones <- read_rds(args$clones)
-    clones <- subset(clones, Sample != "Ri01_5m", features = markers$gene)
     
     clones[[]] <- clones[[]] %>%
         dplyr::mutate(condition = case_when(condition == "Ri01_dis" ~ "Ri",
@@ -163,30 +225,29 @@ main <- function(args){
                                     condition == "Ri" & reactive == "TRUE" ~
                                         "Ri reactive",
                                     condition == "Ri" & reactive == "FALSE" ~
-                                        "Ri non-reactive"))
+                                        "Ri non-reactive"),
+                      rx_by_cnd = factor(rx_by_cnd,
+                                         levels = c("Ri reactive",
+                                                    "HD reactive",
+                                                    "Ri non-reactive",
+                                                    "HD non-reactive")))
     
-    pseudo_cat <- AggregateExpression(clones,
-                                      group.by = "rx_by_cnd",
-                                      return.seurat = TRUE)
-    
-    pdf(file.path(bu_yl_dir, "category_by_reactivity.pdf"),
-        width = 3, height = 8)
-    h <- rx_heatmap(pseudo_cat, markers)
-    print(h)
-    dev.off()
-    
-    pdf(file.path(viridis_dir, "category_by_reactivity.pdf"),
-        width = 3, height = 8)
-    h <- rx_heatmap(pseudo_cat, markers, palette = viridis(100))
-    print(h)
-    dev.off()
-    
-    pdf(file.path(bu_yl_rd_dir, "category_by_reactivity.pdf"),
-        width = 3, height = 8)
-    h <- rx_heatmap(pseudo_cat, markers, palette = bu_yl_rd_pal)
-    print(h)
-    dev.off()
-    
+    # Run analyses for marker set
+    rx_marker_set(clones, markers, name = "category_by_reactivity.pdf")
+        
+    # Reactivity, final lists ----
+    markers <- fig_5_markers()
+    dummy <- lapply(names(markers), function(name){
+        print_nm <- gsub("[[:punct:][:space:]]", "_", name)
+        rx_marker_set(clones,
+                      markers = data.frame(gene = markers[[name]],
+                                           cat_label = name),
+                      palettes = palettes,
+                      name = sprintf("%s.pdf", print_nm),
+                      width = 7, height = 7,
+                      row_names_gp = gpar(fontsize = 14),
+                      row_names_side = "left")
+    })
 }
 
 # ----------------------------------------------------------------------------

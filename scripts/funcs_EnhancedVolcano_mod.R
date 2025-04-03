@@ -15,7 +15,7 @@ volc_mod <- function(tt,
                      x = "avg_log2FC", y = "p_val_adj",
                      FCcutoff = 1, pCutoff = 0.05, pointSize = 2, labSize = 5,
                      shape = 19, colAlpha = 0.5, legendIconSize = 5,
-                     col = c("grey30", "red2","royalblue"),
+                     col = c("grey30", "red2","royalblue"), sigLabsOnly = TRUE,
                      labels = NULL, labelsFrom = "name", labelColour = NULL,
                      force = 5, fontface = "bold",
                      ...){
@@ -48,8 +48,13 @@ volc_mod <- function(tt,
         tt_subs <- tt[tt[[labelsFrom]] %in% labels, ]
         
         # Add repel labels ----    
-        tt_up <- tt[tt[[labelsFrom]] %in% labels & tt$Sig == "up", ]
-        tt_down <- tt[tt[[labelsFrom]] %in% labels & tt$Sig == "down", ]
+        if (isTRUE(sigLabsOnly)){
+            tt_up <- tt[tt[[labelsFrom]] %in% labels & tt$Sig == "up", ]
+            tt_down <- tt[tt[[labelsFrom]] %in% labels & tt$Sig == "down", ]
+        } else {
+            tt_up <- tt[tt[[labelsFrom]] %in% labels & tt[[x]] > 0 , ]
+            tt_down <- tt[tt[[labelsFrom]] %in% labels & tt[[x]] <= 0, ]
+        }
         
         # Do not allow labels to start underneath p-val cutoff
         x_range <- range(tt[[x]])

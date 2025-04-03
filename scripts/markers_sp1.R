@@ -1,3 +1,31 @@
+fig_5_markers <- function(){
+    return(
+        list(Activation =
+             c("HLA-DQA1", "HLA-DQB1", "HLA-DRA", 
+               "HLA-DRB1", "HLA-DRB5", "IL2RB", "CD69",
+               "CD74", "TFRC", "CD44", "TNFRSF9", "VCAM1", "ICAM1"),
+         `Cytotox-cytokines` = 
+             c("TNF", "IFNG", "PRF1", "GZMA", "GZMB", "GZMH", "GZMK",
+               "FASLG", "LAMP1", "NKG7", "CCL4", "CCL3", "CSF1"),
+         `IFN signaling` =
+             c("IFIT1", "RSAD2", "IFIT3", "MX1", "OAS3", "IFI6",
+               "OAS1", "ISG15", "IFI44L", "IFIT2"),
+         `KIR Treg` =
+             c("IKZF2", "KLRC1", "KLRC2", "KLRC3", "KLRK1", "KIR2DL1",
+               "KIR2DL2", "KIR2DL3", "KIR2DL4", "KIR3DL1", "KIR3DL2",
+               "KIR3DL3", "IL7R"),
+         `TCR activation` =
+             c("ZAP70", "LCK", "NFATC1", "NFKB1", "NFKB2",
+               "FOS", "JUN", "RELB", "EGR1", "EGR2", "EGR3", "JUND",
+               "FOSB"),
+         `TCR inhibition` = c("PTPN6", "PTPN11", "INPP5D", "CBL", "SHC1",
+                              "DOK2", "RASA1", "ITCH", "CBLB", "RC3H1",
+                              "RC3H2", "DGKE", "DGKA"),
+         `Tox pathway list` = c("ZFP36L1", "NFKBIA", "SH2B3", "EMPP1",
+                                "LRRK1", "IRF8", "PLCG2", "ABCB9", "PRKCE",
+                                "DAPK2", "ID2", "ADAM9", "EPAS1")))
+}
+
 string_markers <- function(){
     return(structure(
         c("CD74", "HSPA8", "HSP90AA1", "HLA-DRB5", "HSP90AB1", "HSPA5", 
@@ -9,7 +37,6 @@ string_markers <- function(){
           "CSF1", "CCL3", "ATP6V0C", "RARA", "IL21R")))
     
 }
-
 
 functional_markers <- function(){
     list("A_bis" = c("CCR7", "TCF7", "SELL", "BCL2", "CD27",
