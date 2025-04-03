@@ -31,41 +31,11 @@ source(file.path(args$workdir, "scripts/markers_sp1.R"))
 # ----------------------------------------------------------------------------
 # Functions ----
 
-# cluster_heatmap ----
-cluster_heatmap <- function(pseudo_cl, markers, palette = blue_and_yellow()){
-    dat <- LayerData(pseudo_cl, "scale.data")
-    anno <- markers$cat_label[match(Features(pseudo_cl), markers$gene)]
-    cats <- unique(anno) 
-    row_ha = rowAnnotation(Category = anno,
-                           col = list(Category = 
-                                          structure(color("light")(length(cats)),
-                                                    names = cats)),
-                           show_legend = c(FALSE),
-                           show_annotation_name = FALSE)
-    
-    h <- Heatmap(dat,
-            cluster_columns = TRUE,
-            show_column_dend = FALSE,
-            show_row_dend = FALSE, 
-            column_title_gp = gpar(fontsize = 10),
-            column_names_gp = gpar(fontsize = 10),
-            row_names_gp = gpar(fontsize = 7),
-            row_split = length(unique(anno)),
-            row_title_gp = gpar(fontsize = 7.4),
-            column_labels = gsub("g", "", colnames(dat)),
-            col = palette,
-            heatmap_legend_param = list(title = "Scaled \nexpression"),
-            left_annotation = row_ha,
-            cluster_rows = cluster_within_group(t(dat), anno),
-            column_names_rot = 0)
-    return(h)
-}
-
 # reactivity heatmap ----
-rx_heatmap <- function(pseudo_cat, markers, palette, ...) {
-    anno <- markers$cat_label[match(Features(pseudo_cat), markers$gene)]
+rx_heatmap <- function(pseudo, markers, palette, ...) {
+    anno <- markers$cat_label[match(Features(pseudo), markers$gene)]
     cats <- unique(anno) 
-    dat <- LayerData(pseudo_cat, "scale.data")
+    dat <- LayerData(pseudo, "scale.data")
     
     if (length(cats) == 1){
         cluster_rows <- TRUE
@@ -92,7 +62,7 @@ rx_heatmap <- function(pseudo_cat, markers, palette, ...) {
                          column_names_gp = gpar(fontsize = 7),
                          row_split = row_split,
                          row_title_gp = gpar(fontsize = 7.4),
-                         column_labels = unique(pseudo_cat$orig.ident),
+                         column_labels = unique(pseudo$orig.ident),
                          heatmap_legend_param = list(title = "Scaled \nexpression"),
                          left_annotation = row_ha,
                          cluster_rows = cluster_rows,
@@ -105,22 +75,34 @@ rx_heatmap <- function(pseudo_cat, markers, palette, ...) {
 }
 
 # reactivity analyses for single marker set ----
-rx_marker_set <- function(clones,
+rx_marker_set <- function(all_clones,
                           markers,
                           palettes,
                           group_by = "rx_by_cnd",
                           name = "category_by_reactivity.pdf",
                           width = 3,
                           height = 8,
+                          agg_method = "pseudobulk",
                           ...){
     
     clones <- subset(all_clones,
                      Sample != "Ri01_5m",
                      features = markers$gene)
     
-    pseudo_cat <- AggregateExpression(clones,
-                                      group.by = group_by,
-                                      return.seurat = TRUE)
+    if (agg_method == "pseudobulk"){
+        pseudo_cat <- AggregateExpression(clones,
+                                          group.by = group_by,
+                                          return.seurat = TRUE)
+    } else {
+        pseudo_cat <- AverageExpression(clones,
+                                        group.by = group_by,
+                                        return.seurat = TRUE)
+    }
+
+    
+    if (group_by == "seurat_clusters"){
+        pseudo_cat$orig.ident <- gsub("g", "", pseudo_cat$orig.ident)
+    }
     
     dummy <- lapply(names(palettes), function(pal_dir){
         print(file.path(pal_dir, name))
@@ -150,9 +132,10 @@ palettes <- function(results){
 
 # main ----
 main <- function(args){
+    # Setup ----
     results <- file.path(args$results, "heatmaps_fig_4_5")
     if (! file.exists(results)) { dir.create(results, recursive = TRUE) }
-    
+
     palettes <- palettes(results) 
     
     markers <- read_csv(file.path(args$workdir,
@@ -175,37 +158,29 @@ main <- function(args){
     
     # Aggregate across clusters ----
     
-    # to do: test
     rx_marker_set(seurat_subs, 
                   markers,
                   palettes,
                   group_by = "seurat_clusters",
-                  name = "category_by_reactivity.pdf",
-                  width = 5.3, height = 8)
+                  name = "category_by_cluster.pdf",
+                  width = 5.3, height = 8,
+                  column_names_rot = 0,
+                  row_title_gp = gpar(fontsize = 7.4),
+                  column_title_gp = gpar(fontsize = 10),
+                  column_names_gp = gpar(fontsize = 10))
     
-    
-    pseudo_cl <- AggregateExpression(seurat_subs,
-                                     group.by = "seurat_clusters",
-                                     return.seurat = TRUE)
-    
-    pdf(file.path(bu_yl_dir, "category_by_cluster.pdf"),
-        width = 5.3, height = 8)
-    h <- cluster_heatmap(pseudo_cl, markers)
-    print(h)
-    dev.off()
-    
-    pdf(file.path(viridis_dir, "category_by_cluster.pdf"),
-        width = 5.3, height = 8)
-    h <- cluster_heatmap(pseudo_cl, markers, palette = viridis(100))
-    print(h)
-    dev.off()
-    
-    pdf(file.path(bu_yl_rd_dir, "category_by_cluster.pdf"),
-        width = 5.3, height = 8)
-    h <- cluster_heatmap(pseudo_cl, markers, palette = bu_yl_rd_pal)
-    print(h)
-    dev.off()
-    
+    # Averages ----
+    rx_marker_set(seurat_subs, 
+                  markers,
+                  palettes,
+                  group_by = "seurat_clusters",
+                  name = "category_by_cluster_average.pdf",
+                  width = 5.3, height = 8,
+                  column_names_rot = 0,
+                  row_title_gp = gpar(fontsize = 7.4),
+                  column_title_gp = gpar(fontsize = 10),
+                  column_names_gp = gpar(fontsize = 10),
+                  agg_method = "average")
     
     rm(seurat_subs)
     
@@ -233,8 +208,12 @@ main <- function(args){
                                                     "HD non-reactive")))
     
     # Run analyses for marker set
-    rx_marker_set(clones, markers, name = "category_by_reactivity.pdf")
-        
+    rx_marker_set(clones, markers, palettes, name = "category_by_reactivity.pdf")
+    rx_marker_set(clones, markers, palettes,
+                  name = "category_by_reactivity_average.pdf",
+                  agg_method = "average")
+    
+    
     # Reactivity, final lists ----
     markers <- fig_5_markers()
     dummy <- lapply(names(markers), function(name){
@@ -247,6 +226,19 @@ main <- function(args){
                       width = 7, height = 7,
                       row_names_gp = gpar(fontsize = 14),
                       row_names_side = "left")
+    })
+    
+    dummy <- lapply(names(markers), function(name){
+        print_nm <- gsub("[[:punct:][:space:]]", "_", name)
+        rx_marker_set(clones,
+                      markers = data.frame(gene = markers[[name]],
+                                           cat_label = name),
+                      palettes = palettes,
+                      name = sprintf("%s_average.pdf", print_nm),
+                      width = 7, height = 7,
+                      row_names_gp = gpar(fontsize = 14),
+                      row_names_side = "left",
+                      agg_method = "average")
     })
 }
 

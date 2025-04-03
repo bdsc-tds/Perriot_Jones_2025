@@ -82,7 +82,7 @@ main <- function(args){
                              "volcano_coi_Ri01_dis_v_Ri01_5m_blue_orange.pdf"))
     
     # PCA, clones of interest ----
-    ri01_data <- read_rds("data/processed/one_tcr_beta/ri01_cois.rds")
+    ri01_data <- read_rds("data/processed/one_tcr_beta/ri01_cois_mat.rds")
     ri01_data <- ri01_data[markers(), ]
     
     ri01_md <- read_csv("data/processed/one_tcr_beta/ri01_cois_metadata.csv")
@@ -115,7 +115,7 @@ main <- function(args){
     # PCA, selected markers, one plot per PCA ----
     selected_markers <- selected_markers()
     
-    ri01_data <- read_rds("data/processed/one_tcr_beta/ri01_cois.rds")
+    ri01_data <- read_rds("data/processed/one_tcr_beta/ri01_cois_mat.rds")
     ri01_a <- ri01_data[selected_markers[["A"]], ]
     ri01_b <- ri01_data[selected_markers[["B"]], ]
     
@@ -165,9 +165,6 @@ main <- function(args){
                  colkey = c("Ri01_dis" = "orange", "Ri01_5m" = "#0C7BDC")) 
     print(bp)
     dev.off()
-    
-    
-    
     
     
     # ------

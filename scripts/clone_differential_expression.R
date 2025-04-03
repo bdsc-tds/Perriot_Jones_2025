@@ -412,7 +412,7 @@ main <- function(args, min_cells = 5, ...){
     run_de <- purrr::partial(run_diff_expr, results = args$results, ...)
     run_pseudo <- purrr::partial(run_diff_expr_pb, results = args$results, ...)
     
-    # Subset to clones where reactivity information is known
+    # Subset to clones where reactivity information is known ----
     clones <- subset(seurat_obj, reactive %in% c(TRUE, FALSE))
     write_rds(clones, file.path(dirname(args$seurat), "reactive_clones.rds"))
     
@@ -542,11 +542,32 @@ main <- function(args, min_cells = 5, ...){
         write_csv(file.path(dirname(args$seurat), "ri01_cois_metadata.csv"))
     
     write_rds(ri01_data,
+              file.path(dirname(args$seurat), "ri01_cois_mat.rds"))
+    write_rds(ri01,
               file.path(dirname(args$seurat), "ri01_cois.rds"))
     
     coi_de <- run_de(ri01, "Sample",
-                    "Ri01_dis", "Ri01_5m",
-                    "Ri01_dis_v_5m_clones_of_interest")
+                     "Ri01_dis", "Ri01_5m",
+                     "Ri01_dis_v_5m_clones_of_interest")
+    
+    # Write average expression of additional selected clones ----
+    Idents(ri01) <- "Sample"
+    AverageExpression(ri01, assays = "RNA")[["RNA"]] %>%
+        as_tibble(rownames = "gene") %>%
+        write_csv(file.path(args$results,
+                            "Ri01_dis_v_5m_clones_of_interest",
+                            "avg_expr_dis_5m.csv"))
+    
+    # Average expression each independently
+    ri01[[]] <- ri01[[]] %>%
+        dplyr::mutate(sample_clone = paste(Sample, coi_temp, sep = "_")) 
+    Idents(ri01) <- "sample_clone"
+    AverageExpression(ri01, assays = "RNA")[["RNA"]] %>%
+        as_tibble(rownames = "gene") %>%
+        write_csv(file.path(args$results,
+                            "Ri01_dis_v_5m_clones_of_interest",
+                            "avg_expr_dis_5m_by_clone.csv"))
+
 }
 
 # ----------------------------------------------------------------------------
