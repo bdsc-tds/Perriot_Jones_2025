@@ -91,24 +91,25 @@ main <- function(args){
     
     ri01_pcs <- pca(ri01_data, metadata = ri01_md)
     
+    run_biplot <- purrr::partial(biplot,
+                                 lab = NULL,
+                                 colby = "Sample",
+                                 colkey = c("Ri01_dis" = "orange",
+                                            "Ri01_5m" = "#0C7BDC"))
+    
+    
     pdf(file.path(coi_res, "biplot_both_clones.pdf"))
-    bp <- biplot(ri01_pcs,
+    bp <- run_biplot(ri01_pcs,
                  showLoadings = TRUE,
-                 ntopLoadings = length(markers()),
-                 lab = NULL,
-                 colby = "Sample",
-                 colkey = c("Ri01_dis" = "orange", "Ri01_5m" = "#0C7BDC")) 
+                 ntopLoadings = length(markers())) 
     print(bp)
     dev.off()
 
     pdf(file.path(coi_res, "biplot_both_clones_scaled.pdf"))
     ri01_pcs_scaled <- pca(ri01_data, metadata = ri01_md, scale = TRUE)
-    bp <- biplot(ri01_pcs_scaled,
+    bp <- run_biplot(ri01_pcs_scaled,
                  showLoadings = TRUE,
-                 ntopLoadings = length(markers()),
-                 lab = NULL,
-                 colby = "Sample",
-                 colkey = c("Ri01_dis" = "orange", "Ri01_5m" = "#0C7BDC")) 
+                 ntopLoadings = length(markers())) 
     print(bp)
     dev.off()
     
@@ -130,57 +131,37 @@ main <- function(args){
     
     # Unscaled ----
     pdf(file.path(coi_res, "pca_both_clones_set_A.pdf"))
-    bp <- biplot(ri01_a_pcs,
-                 showLoadings = FALSE,
-                 lab = NULL,
-                 colby = "Sample",
-                 colkey = c("Ri01_dis" = "orange", "Ri01_5m" = "#0C7BDC")) 
+    bp <- run_biplot(ri01_a_pcs,
+                 showLoadings = FALSE) 
     print(bp)
     dev.off()
     
     pdf(file.path(coi_res, "pca_both_clones_set_B.pdf"))
-    bp <- biplot(ri01_b_pcs,
-                 showLoadings = FALSE,
-                 lab = NULL,
-                 colby = "Sample",
-                 colkey = c("Ri01_dis" = "orange", "Ri01_5m" = "#0C7BDC")) 
+    bp <- run_biplot(ri01_b_pcs,
+                     showLoadings = FALSE,) 
     print(bp)
     dev.off()
     
     # Scaled ----
     pdf(file.path(coi_res, "pca_both_clones_set_A_scaled.pdf"))
-    bp <- biplot(ri01_a_pcs_scaled,
-                 showLoadings = FALSE,
-                 lab = NULL,
-                 colby = "Sample",
-                 colkey = c("Ri01_dis" = "orange", "Ri01_5m" = "#0C7BDC")) 
+    bp <- run_biplot(ri01_a_pcs_scaled,
+                     showLoadings = FALSE) 
     print(bp)
     dev.off()
     
     pdf(file.path(coi_res, "pca_both_clones_set_B_scaled.pdf"))
-    bp <- biplot(ri01_b_pcs_scaled,
-                 showLoadings = FALSE,
-                 lab = NULL,
-                 colby = "Sample",
-                 colkey = c("Ri01_dis" = "orange", "Ri01_5m" = "#0C7BDC")) 
+    bp <- run_biplot(ri01_b_pcs_scaled,
+                     showLoadings = FALSE) 
     print(bp)
     dev.off()
-    
     
     # ------
-    
     pdf(file.path(coi_res, "biplot_both_clones.pdf"))
-    bp <- biplot(ri01_pcs,
-                 showLoadings = TRUE,
-                 ntopLoadings = length(markers()),
-                 lab = NULL,
-                 colby = "Sample",
-                 colkey = c("Ri01_dis" = "orange", "Ri01_5m" = "#0C7BDC")) 
+    bp <- run_biplot(ri01_pcs,
+                     showLoadings = TRUE,
+                     ntopLoadings = length(markers())) 
     print(bp)
     dev.off()
-    
-    
-    
     
     # -----
     single_clone <- ## REMOVED SELECTION, CHECK IF ALLOWED  
@@ -190,30 +171,27 @@ main <- function(args){
     clone_pcs <- pca(single_clone_dat, metadata = single_clone_md)
     
     pdf(file.path(coi_res, "biplot_first_clone.pdf"))
-    bp <- biplot(clone_pcs,
-                 showLoadings = TRUE,
-                 ntopLoadings = length(markers()),
-                 lab = NULL,
-                 colby = "Sample",
-                 colkey = c("Ri01_dis" = "orange", "Ri01_5m" = "#0C7BDC")) 
+    bp <- run_biplot(clone_pcs,
+                     showLoadings = TRUE,
+                     ntopLoadings = length(markers())) 
     print(bp)
     dev.off()
     
     pdf(file.path(coi_res, "biplot_first_clone_scaled.pdf"))
     clone_pcs_scaled <- pca(single_clone_dat, metadata = single_clone_md, scale = TRUE)
-    bp <- biplot(clone_pcs_scaled,
-                 showLoadings = TRUE,
-                 ntopLoadings = length(markers()),
-                 lab = NULL,
-                 colby = "Sample",
-                 colkey = c("Ri01_dis" = "orange", "Ri01_5m" = "#0C7BDC")) 
+    bp <- run_biplot(clone_pcs_scaled,
+                     showLoadings = TRUE,
+                     ntopLoadings = length(markers())) 
     print(bp)
     dev.off()
     
+    # All reactive clones with clones of interest highlighted ----
+    reactive <- read_rds("data/processed/one_tcr_beta/reactive_clones.rds")
+    
+    
+    
+    
 
-    
-    
-    
 }
 
 # ----------------------------------------------------------------------------
