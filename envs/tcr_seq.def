@@ -1,0 +1,45 @@
+BootStrap: docker
+From: rocker/rstudio:latest
+
+BootStrap: docker
+From: bioconductor/bioconductor_docker
+
+%post
+    Rscript -e 'BiocManager::install(version = "3.19", ask = FALSE)'
+    Rscript -e 'BiocManager::install(c("scater", "scran", "scuttle"))'
+    Rscript -e 'BiocManager::install("ncborcherding/scRepertoire")'
+    Rscript -e 'BiocManager::install(c("bluster", "DropletUtils"))'
+    Rscript -e 'BiocManager::install(c("tidyverse", "patchwork"))'
+    Rscript -e 'BiocManager::install(c("Seurat"))'
+    Rscript -e 'BiocManager::install(c("remotes"))'
+    Rscript -e 'BiocManager::install("UCell")'
+    Rscript -e 'BiocManager::install("rhsf5")'
+    Rscript -e 'BiocManager::install("PCAtools")'
+    Rscript -e 'BiocManager::install("PCAtools")'
+    Rscript -e 'BiocManager::install("khroma")'
+    Rscript -e 'BiocManager::install("hexbin")'
+    Rscript -e 'BiocManager::install("ggalluvial")'
+    Rscript -e 'BiocManager::install("ggpubr")'
+    Rscript -e 'BiocManager::install("scCustomize")'
+    Rscript -e 'BiocManager::install("ComplexHeatmap")'
+    Rscript -e 'BiocManager::install("DESeq2")'
+    Rscript -e 'BiocManager::install("scDblFinder")'
+    Rscript -e 'BiocManager::install("argparse")'
+    
+    # Harmony allows simpler import from cellbender? untested
+    Rscript -e 'remotes::install_github("satijalab/seurat-data")'
+    Rscript -e 'remotes::install_github("satijalab/azimuth")'
+    Rscript -e 'remotes::install_github("satijalab/seurat-wrappers")' 
+    Rscript -e 'remotes::install_github("immunogenomics/harmony")'
+    Rscript -e 'remotes::install_github("igrabski/sc-SHC")'
+
+    # For Kaufman
+    Rscript -e 'BiocManager::install("survival")'
+    Rscript -e 'BiocManager::install("mice")'
+    Rscript -e 'BiocManager::install("janitor")'
+
+    # scGate doesn't install directly but is installed correctly
+    # as a dependency of ProjecTILs
+    Rscript -e 'BiocManager::install("carmonalab/STACAS")'
+    Rscript -e 'BiocManager::install("carmonalab/ProjecTILs")'
+
