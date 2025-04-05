@@ -1,5 +1,5 @@
 # Perriot_Jones_2025
-Code for R analyses for Perriot and Jones et al, 2025.
+Code for R analyses for Perriot and Jones et al, 2025.  The TCR-seq data used in the study will be made availabe upon acceptance of the manuscript.  Running the analyses involving tested clones requires a list of the TCR sequences which we do not include in this github repository.  Please contact the corresponding authors for access to this table.  
 
 Currently, this repository includes exploratory code.  We are in the process of 
 tidying the repository to just include the analyses in the submitted manuscript,
