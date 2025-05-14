@@ -1,45 +1,89 @@
 library("ComplexHeatmap")
 
-palette_steps <- function(disp.min, disp.max, n_steps = 49){
-    steps <- (disp.max - disp.min)/n_steps
-    steps <- seq(disp.min, disp.max, by = steps) 
-    return(steps)
+# pseudobulk heatmap (for figure 4f and 5c-h) ----
+pb_heatmap <- function(pseudo, markers, palette, ...) {
+    anno <- markers$cat_label[match(Features(pseudo), markers$gene)]
+    cats <- unique(anno) 
+    dat <- LayerData(pseudo, "scale.data")
+    
+    if (length(cats) == 1){
+        cluster_rows <- TRUE
+        row_split <- NULL
+        row_ha <- NULL
+    } else {
+        cluster_rows <- cluster_within_group(t(dat), anno)
+        row_split <- length(cats)
+        row_ha <- rowAnnotation(Category = anno,
+                                col = list(Category = 
+                                               structure(color("light")(length(cats)),
+                                                         names = cats)),
+                                show_legend = c(FALSE),
+                                show_annotation_name = FALSE)
+    }
+    
+    heatmap_args <- list(matrix = dat,
+                         col = palette,
+                         cluster_columns = TRUE,
+                         show_column_dend = FALSE,
+                         show_row_dend = FALSE, 
+                         column_title_gp = gpar(fontsize = 10),
+                         row_names_gp = gpar(fontsize = 7),
+                         column_names_gp = gpar(fontsize = 7),
+                         row_split = row_split,
+                         row_title_gp = gpar(fontsize = 7.4),
+                         column_labels = unique(pseudo$orig.ident),
+                         heatmap_legend_param = list(title = "Scaled \nexpression"),
+                         left_annotation = row_ha,
+                         cluster_rows = cluster_rows,
+                         column_names_rot = 45,
+                         row_gap = unit(2, "mm"))
+    
+    heatmap_args <- modifyList(heatmap_args, list(...))
+    
+    return(do.call(Heatmap, heatmap_args))
 }
 
-# purple_and_yellow ----
-purple_and_yellow <- function(disp.min = -2.5, disp.max = 2.5){
-    steps <- palette_steps(disp.min = disp.min, disp.max = disp.min)
-    pp_yl_pal <- circlize::colorRamp2(steps, PurpleAndYellow())
-    return(pp_yl_pal)
+
+# reactivity analyses for single marker set ----
+pb_marker_set <- function(all_clones,
+                          markers,
+                          palettes,
+                          group_by = "rx_by_cnd",
+                          name = "category_by_reactivity.pdf",
+                          width = 3,
+                          height = 8,
+                          agg_method = "pseudobulk",
+                          ...){
+    
+    # Subset to genes of interest, aggregate expression
+    clones <- subset(all_clones,
+                     Sample != "Ri01_5m",
+                     features = markers$gene)
+    
+    if (agg_method == "pseudobulk"){
+        pseudo_cat <- AggregateExpression(clones,
+                                          group.by = group_by,
+                                          return.seurat = TRUE)
+    } else {
+        pseudo_cat <- AverageExpression(clones,
+                                        group.by = group_by,
+                                        return.seurat = TRUE)
+    }
+    
+    
+    if (group_by == "seurat_clusters"){
+        pseudo_cat$orig.ident <- gsub("g", "", pseudo_cat$orig.ident)
+    }
+    
+    # For each palette, make a heatmap of aggregated values
+    dummy <- lapply(names(palettes), function(pal_dir){
+        print(file.path(pal_dir, name))
+        pdf(file.path(pal_dir, name), width = width, height = height)
+        h <- pb_heatmap(pseudo_cat, markers, palette = palettes[[pal_dir]], ...)
+        print(h)
+        dev.off()
+    })
 }
-
-
-blue_yellow_red <- function(){
-    return(rev(brewer.pal(n = 7, name = "RdYlBu")))
-}
-
-blue_and_yellow <- function(disp.min = -2.5, disp.max = 2.5){
-    bu_yl <- c("#0C7BDC", "#2E73CA", "#7E6C6E", "#B28808", "#FFC20A")
-    steps <- palette_steps(disp.min, disp.max, n_steps = 4)
-    bu_yl_pal <- circlize::colorRamp2(steps, bu_yl)
-    return(bu_yl_pal)
-}
-
-blue_white_yellow <- function(disp.min = -2.5, disp.max = 2.5){
-    bu_yl <- c("#0C7BDC", "#FFFFFF", "#FFC20A")
-    steps <- palette_steps(disp.min, disp.max, n_steps = 2)
-    bu_yl_pal <- circlize::colorRamp2(steps, bu_yl)
-    return(bu_yl_pal)
-}
-
-
-blue_white_orange <- function(disp.min = -2.5, disp.max = 2.5){
-    bu_yl <- c("#0C7BDC", "#FFFFFF", "darkorange")
-    steps <- palette_steps(disp.min, disp.max, n_steps = 2)
-    bu_yl_pal <- circlize::colorRamp2(steps, bu_yl)
-    return(bu_yl_pal)
-}
-
 
 heatmap_w_labs <- function(obj,
                            col_group,
