@@ -43,7 +43,6 @@ pb_heatmap <- function(pseudo, markers, palette, ...) {
     return(do.call(Heatmap, heatmap_args))
 }
 
-
 # reactivity analyses for single marker set ----
 pb_marker_set <- function(all_clones,
                           markers,
@@ -85,6 +84,22 @@ pb_marker_set <- function(all_clones,
     })
 }
 
+
+palette_steps <- function(disp.min, disp.max, n_steps = 49){
+    steps <- (disp.max - disp.min)/n_steps
+    steps <- seq(disp.min, disp.max, by = steps) 
+    return(steps)
+}
+
+
+# purple_and_yellow ----
+pp_and_yl <- function(disp.min = -2.5, disp.max = 2.5){
+    steps <- palette_steps(disp.min = disp.min, disp.max = disp.min)
+    pp_yl_pal <- circlize::colorRamp2(steps, PurpleAndYellow())
+    return(pp_yl_pal)
+}
+
+# heatmap_w_labs ----
 heatmap_w_labs <- function(obj,
                            col_group,
                            col_labs = NULL,
@@ -97,7 +112,8 @@ heatmap_w_labs <- function(obj,
                            row_names_gp = gpar(fontsize = 3),
                            ...){
     if (is.null(palette)){
-        palette <- purple_and_yellow(disp.min = disp_min, disp.max = disp_max) 
+        #palette <- pp_and_yl(disp.min = disp_min, disp.max = disp_max) 
+        palette <- viridis::viridis(100)
     }
     
     dat <- LayerData(obj, "scale.data")

@@ -23,14 +23,14 @@ parser$add_argument('--min_cells',  '-m', default = 5,
 args <- parser$parse_args()
 
 source(file.path(args$workdir, "scripts/funcs_EnhancedVolcano_mod.R"))
-source(file.path(args$workdir, "scripts/markers_sp1.R"))
+source(file.path(args$workdir, "scripts/funcs_custom_heatmaps.R"))
 source(file.path(args$workdir, "scripts/clones_of_interest.R"))
 # ----------------------------------------------------------------------------
 
 # make_pseudobulk - wrapper with corrections for when a category has no counts
 # for any gene ----
-make_pseudobulk <- function(obj, idents){
-    gp_by = unique(c("Sample", "beta_aa", idents))
+make_pseudobulk <- function(obj, idents, group_by = c("Sample", "beta_aa")){
+    gp_by = unique(c(group_by, idents))
     clone_pseudo <- AggregateExpression(obj,
                                         group.by = gp_by,
                                         return.seurat = TRUE)
@@ -49,98 +49,6 @@ filter_tcr_genes <- function(markers){
     markers %>%
         dplyr::filter(! grepl("^TR[ABGD][VDJ]", gene))
 } 
-
-# purple_and_yellow ----
-purple_and_yellow <- function(disp.min = -2.5, disp.max = 2.5){
-    pp_yl <- (disp.max - disp.min)/49
-    pp_yl <- seq(disp.min, disp.max, by = pp_yl) 
-    pp_yl_pal <- circlize::colorRamp2(pp_yl, PurpleAndYellow())
-    return(pp_yl_pal)
-}
-
-# Heatmap ----
-heatmap_w_labs <- function(obj,
-                           col_group,
-                           col_labs = tcr_cat_to_label(),
-                           disp_min = -2.5,
-                           disp_max = 2.5,
-                           row_group = FALSE,
-                           column_title_gp = gpar(fontsize = 10),
-                           column_names_gp = gpar(fontsize = 10),
-                           row_names_gp = gpar(fontsize = 3),
-                           show_column_names = FALSE,
-                           ...){
-    pp_yl_pal <- purple_and_yellow(disp.min = disp_min, disp.max = disp_max) 
-    dat <- LayerData(obj, "scale.data")
-    dat[, apply(dat, 2, function(x) all(is.na(x)))] <- 0
-    print(range(dat))
-    
-    col_group <- col_labs[as.character(obj[[col_group]][,1])]
-    
-    if (! isTRUE(row_group) & ! isFALSE(row_group)) { 
-        row_group <- cluster_within_group(t(dat), row_group)
-    }
-    
-    Heatmap(dat,
-            cluster_columns = cluster_within_group(dat, col_group),
-            cluster_rows = row_group,
-            show_column_dend = FALSE,
-            show_row_dend = FALSE, 
-            # Causing problems for one_v_all
-            column_split = length(unique(col_group)), 
-            column_title_gp = column_title_gp,
-            column_names_gp = column_names_gp, 
-            row_names_gp = row_names_gp,
-            column_labels = gsub("_.*", "", colnames(dat)),
-            col = pp_yl_pal,
-            show_column_names = show_column_names,
-            heatmap_legend_param = list(title = "Scaled \nexpression"),
-            ...)
-}
-
-# Make single dotplot ----  
-make_dotplot <- function(seurat_obj, markers, out_fname,
-                         ht = 5, scale = TRUE){
-    
-    pdf(out_fname, height = ht)
-    p <- DotPlot(seurat_obj,
-                 scale = scale,
-                 features = Features(seurat_obj)) + 
-        coord_flip() +
-        scale_color_viridis_c() +
-        labs(y = NULL, x = NULL) +
-        theme(panel.grid = element_line(color = "gray")) +
-        guides(size = guide_legend(title = "Percent\nExpressed"),
-               colour = guide_legend(title = "Average\nExpression"))
-    print(p)
-    dev.off()
-}
-
-# Make dotplots with and without scaling  ----  
-make_dotplots <- function(seurat_obj, results, marker_sets){
-    template <- file.path(results, "%s_%s.pdf")
-    
-    for (mk_nm in names(marker_sets)){
-        markers <- marker_sets[[mk_nm]]
-        if (length(intersect(markers, Features(seurat_obj))) == 0){
-            print(sprintf("no markers found: %s", mk_nm))
-            next()
-        }
-        
-        out_nm <- gsub("[-\\/ ]", "_", mk_nm)
-        marker_subset <- subset(seurat_obj, features = markers)
-        DefaultAssay(marker_subset) <- "RNA"
-        marker_subset <- ScaleData(marker_subset, features = markers)
-        #Idents(marker_subset) <- as.numeric(marker_subset$seurat_clusters)
-        
-        make_dotplot(marker_subset, markers,
-                     sprintf(template, "dotplot_unscaled", out_nm),
-                     scale = FALSE)
-        make_dotplot(marker_subset, markers,
-                     sprintf(template, "dotplot_scaled", out_nm),
-                     scale = TRUE)
-    }
-}
 
 # write top genes ----
 write_top_genes <- function(de, obj, res_dir, pval_min, fc_cutoff = 0.25){
@@ -200,7 +108,9 @@ make_heatmaps <- function(obj, de, idents, out_fname, max_n, remove_tcr = FALSE,
         out_fname <- gsub("(\\.pdf|\\.png)$", "_no_tcr\\1", out_fname)    
     }
 
+    de <- de %>% filter(! is.na(p_val_adj))
     n_sig <- sum(de$p_val_adj <= pval_min)
+    
     # If there aren't enough differentially expressed genes, ignore p_val cutoff
     if (n_sig > max_n){
         de <- de %>%
@@ -220,17 +130,12 @@ make_heatmaps <- function(obj, de, idents, out_fname, max_n, remove_tcr = FALSE,
     
     obj_subs <- subset(obj, features = de$gene)
     obj_subs <- ScaleData(obj_subs, features = Features(obj_subs))
+     
+    # Pseudobulk heatmap ----
+    if (isTRUE(pseudobulk)) { obj_subs <- make_pseudobulk(obj_subs, idents) } 
     
-    # Default Seurat heatmap ----
-    pdf(out_fname, width = wd, height = ht)
-    h <- DoHeatmap(obj_subs, features = de$gene, ...) +
-        theme(axis.text.y = element_text(size = 4))
-    print(h)
-    dev.off()
-    
-    # Customised heatmap ----
-
-    pdf(gsub(".pdf", "_clustered.pdf", out_fname), width = wd, height = ht)
+    pdf(gsub(".pdf", "_pseudobulk_clustered.pdf", out_fname),
+        width = wd, height = ht)
     h <- heatmap_w_labs(obj_subs,
                         col_labs = structure(levels(Idents(obj_subs)),
                                              names = levels(Idents(obj_subs))), 
@@ -238,33 +143,11 @@ make_heatmaps <- function(obj, de, idents, out_fname, max_n, remove_tcr = FALSE,
                         row_group = FALSE)
     print(h)
     dev.off()
-    
-    if (isFALSE(pseudobulk)) return()
-    
-    # Pseudobulk heatmap ----
-    clone_pseudo <- make_pseudobulk(obj_subs, idents)
-    
-    pdf(gsub(".pdf", "_pseudobulk.pdf", out_fname), width = wd, height = ht)
-    h <- DoHeatmap(clone_pseudo, features = de$gene, ...) +
-        theme(axis.text.y = element_text(size = 4))
-    print(h)
-    dev.off()
-    
-    pdf(gsub(".pdf", "_pseudobulk_clustered.pdf", out_fname),
-        width = wd, height = ht)
-    h <- heatmap_w_labs(clone_pseudo,
-                        col_labs = structure(levels(Idents(clone_pseudo)),
-                                             names = levels(Idents(clone_pseudo))), 
-                        col_group = idents, 
-                        row_group = FALSE)
-    print(h)
-    dev.off()
-    
 }
 
 # Run differential expression analyses ----
 run_diff_expr <- function(obj, results_dir, idents, ident_1, ident_2,
-                          name, markers = functional_markers(), max_n = 100,
+                          name, max_n = 100,
                           pval_min = 0.05, wd = 7, ht = 7, ...){
     res_dir <- file.path(results_dir, name)
     if (! file.exists(res_dir)) { dir.create(res_dir, recursive = TRUE) }
@@ -299,25 +182,33 @@ run_diff_expr <- function(obj, results_dir, idents, ident_1, ident_2,
                   max_n = max_n, pval_min = pval_min, wd = wd, ht = ht,
                   group.by = idents)
     
-    # Dot plots for marker set H
-    make_dotplots(obj, res_dir, markers)
-    
     return(de)
 }
 
 # run_diff_expr_pb ----
 run_diff_expr_pb <- function(obj, results_dir, idents, ident_1, ident_2,
-                             name, markers = functional_markers(), max_n = 100,
+                             group_by, name, max_n = 100, test_use = "DESeq2",
                              pval_min = 0.05, wd = 7, ht = 7, ...){
     res_dir <- file.path(results_dir, name)
     if (! file.exists(res_dir)) { dir.create(res_dir, recursive = TRUE) }
     
-    pseudo <- make_pseudobulk(obj, idents)
+    pseudo <- make_pseudobulk(obj, idents, group_by)
     
-    # Run diff expr
+    # Write summed and average counts ----
+    pseudo_counts <- as.matrix(LayerData(pseudo, "counts")) %>%
+        as_tibble(rownames = "gene")
+    write_csv(pseudo_counts, file.path(res_dir, "summed_counts.csv"))
+
+    av_expr <- as.matrix(AverageExpression(obj,
+                               group.by = unique(c(idents, group_by)),
+                               layer = "counts")$RNA) %>%
+        as_tibble(rownames = "gene")
+    write_csv(av_expr, file.path(res_dir, "average_counts.csv"))
+    
+    # Run diff expr ----
     Idents(pseudo) <- pseudo[[idents]][, 1]
     de <- FindMarkers(pseudo, ident.1 = ident_1, ident.2 = ident_2, 
-                      test.use = "DESeq2", ...) %>%
+                      test.use = test_use, ...) %>%
         dplyr::as_tibble(rownames = "gene") %>%
         dplyr::mutate("comparison" = name) %>%
         relocate(gene, comparison)
@@ -329,34 +220,13 @@ run_diff_expr_pb <- function(obj, results_dir, idents, ident_1, ident_2,
     write_csv(de, file.path(res_dir, "diff_expr_pseudo_rm_tcr.csv"))
     
     make_heatmaps(pseudo, de, idents,
-                  out_fname = file.path(res_dir("heatmap_pseudobulk_de.pdf")),
-                  max_n,
+                  out_fname = file.path(res_dir, "heatmap_pseudobulk_de.pdf"),
+                  max_n = max_n,
                   pseudobulk = FALSE)
     
     return(de)
 }
 
-
-# Filter clones for minimum number of cells ---- 
-clones_min_n <- function(md, min_cells = 5){
-    keep_clones <- md %>%
-        dplyr::group_by(Sample, beta_aa) %>%
-        dplyr::summarise(n = n()) %>%
-        dplyr::filter(n >= min_cells) %>%
-        dplyr::select(-n)
-    md %>% semi_join(keep_clones)
-}
-
-# Get the cluster with the most clones of interest ----
-get_cluster_coi <- function(md){
-    md %>%
-        dplyr::filter(is_coi == "coi") %>%
-        dplyr::group_by(seurat_clusters) %>%
-        dplyr::summarise(n = n()) %>%
-        dplyr::arrange(desc(n)) %>%
-        dplyr::slice_head(n = 1) %>%
-        dplyr::pull(seurat_clusters)
-}
 
 # Make counts table ----
 cluster_counts_table <- function(md, out_fname){
@@ -376,6 +246,23 @@ clones_counts_table <- function(md, out_fname){
         write_csv(out_fname)
 }
 
+fig_5f_all <- function(){
+    markers <- c("HLA-DQA1", "HLA-DQB1", "HLA-DRA", "HLA-DRB1", "HLA-DRB5", 
+                 "IL2RB", "CD69", "CD74", "TFRC", "CD44", "TNFRSF9", "VCAM1", 
+                 "ICAM1", "TNF", "IFNG", "PRF1", "GZMA", "GZMB", "GZMH", "GZMK", 
+                 "FASLG", "LAMP1", "NKG7", "CCL4", "CCL3", "CSF1", "IFIT1", "RSAD2", 
+                 "IFIT3", "MX1", "OAS3", "IFI6", "OAS1", "ISG15", "IFI44L", "IFIT2", 
+                 "IKZF2", "KLRC1", "KLRC2", "KLRC3", "KLRK1", "KIR2DL1", "KIR2DL2", 
+                 "KIR2DL3", "KIR2DL4", "KIR3DL1", "KIR3DL2", "KIR3DL3", "IL7R", 
+                 "ZAP70", "LCK", "NFATC1", "NFKB1", "NFKB2", "FOS", "JUN", "RELB", 
+                 "EGR1", "EGR2", "EGR3", "JUND", "FOSB", "PTPN6", "PTPN11", "INPP5D", 
+                 "CBL", "SHC1", "DOK2", "RASA1", "ITCH", "CBLB", "RC3H1", "RC3H2", 
+                 "DGKE", "DGKA", "ZFP36L1", "NFKBIA", "SH2B3", "EMPP1", "LRRK1", 
+                 "IRF8", "PLCG2", "ABCB9", "PRKCE", "DAPK2", "ID2", "ADAM9", "EPAS1"
+    )
+    return(markers)
+}
+
 # main ----
 main <- function(args, min_cells = 5, ...){
     
@@ -388,25 +275,12 @@ main <- function(args, min_cells = 5, ...){
     
     seurat_obj <- read_rds(args$seurat)
     selected_clones <- read_csv(args$clones) %>% unique()
-        
-    # This works as data was filtered for exactly one tcr beta
-    seurat_obj[[]] <- seurat_obj[[]] %>%
-        dplyr::mutate(cdr3_aa_beta = CTaa2) %>%
-        tidyr::separate(TCR2,
-                        into = c("trbv", "trbd", "trbj", "trbc"),
-                        sep = "\\.",
-                        remove = FALSE) %>%
-        dplyr::left_join(selected_clones,
-                         by = c("Sample","cdr3_aa_beta", "trbv", "trbj"),
-                         relationship = "many-to-one")
-
-    coi_cluster_id <- get_cluster_coi(seurat_obj[[]])
     
     # Write table of counts per cluster ---- 
     cluster_counts_table(seurat_obj[[]] %>%
                              dplyr::filter(seurat_clusters == coi_cluster_id),
                       file.path(args$results,
-                                sprintf("tabels/clone_counts_cl_%s.csv",
+                                sprintf("tables/clone_counts_cl_%s.csv",
                                         coi_cluster_id)))
     
     run_de <- purrr::partial(run_diff_expr, results = args$results, ...)
@@ -447,128 +321,167 @@ main <- function(args, min_cells = 5, ...){
                                 coi_cluster_id)))
     
     
-    # Differential expression -----
+    # Remove followup sample, adjust condition ---- 
     clones_wo_5m <- subset(clones, Sample != "Ri01_5m")
     
-    # Fix condition
     clones_wo_5m[[]] <- clones_wo_5m[[]] %>%
         dplyr::mutate(condition = case_when(condition == "Ri01_dis" ~ "Ri",
                                             TRUE ~ condition),
                       reactive_lab = case_when(reactive == "TRUE" ~ "Reactive",
                                                reactive == "FALSE" ~ "Non-reactive"))
-
-    # Subset to just reactive clones, test HD v Ri ----
-    rx <- subset(clones_wo_5m, reactive == "TRUE")
-    cnd_de <- run_de(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD")
-    cnd_de_pb <- run_pseudo(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD_pseudo")
     
-    # Subset to Ri, test reactive versus non-reactive ----
-    ri <- subset(clones_wo_5m, condition == "Ri")
-    ri_de <- run_de(ri, "reactive_lab",
-                    "Reactive", "Non-reactive", "Ri_rx_v_non_rx")
-    ri_de_pb <- run_pseudo(ri, "reactive_lab",
-                           "Reactive", "Non-reactive", "Ri_rx_v_non_rx_pseudo")
-    
-    # Subset to HD, test reactive versus non-reactive ----
-    hd <- subset(clones_wo_5m, condition == "HD")
-    hd_de <- run_de(hd, "reactive_lab",
-                    "Reactive", "Non-reactive", "HD_rx_v_non_rx")
-    hd_de_pb <- run_pseudo(hd, "reactive_lab",
-                          "Reactive", "Non-reactive", "HD_rx_v_non_rx_pseudo")
-    
-    # Reactive verus non-reactive, all_samples ----
-    rx_dr <- run_de(clones_wo_5m, "reactive_lab",
-                    "Reactive", "Non-reactive",
-                    "all_samples_rx_v_non_rx")
-    rx_dr_pb <- run_pseudo(clones_wo_5m, "reactive_lab",
-                           "Reactive", "Non-reactive",
-                           "all_samples_rx_v_non_rx")
-    
-    # Reactive by condition ----
     clones_wo_5m[[]] <- clones_wo_5m[[]] %>%
         dplyr::mutate(rx_by_cnd = paste(condition, reactive, sep = "_"))
     Idents(clones_wo_5m) <- "rx_by_cnd"
     
-    one_v_all_de <- FindAllMarkers(clones_wo_5m)
-    write_csv(one_v_all_de,
-              file.path(args$results, "condition_by_reactivity/de_full.csv"))
-    make_heatmaps(clones_wo_5m, one_v_all_de, "rx_by_cnd",
-                  max_n = 100, remove_tcr = TRUE,
-                  out_fname = 
-                      file.path(args$results,
-                                "condition_by_reactivity/heatmap.pdf"))
+    #_______________________________________________________
+    # Violin plots and heatmaps for cluster 1 reactive 
     
-    clones_wo_5m_pb <- make_pseudobulk(clones_wo_5m, "rx_by_cnd")
-    one_v_all_de_pb <- FindAllMarkers(clones_wo_5m_pb, test.use = "DESeq2")
-    write_csv(one_v_all_de_pb,
-              file.path(args$results,
-                        "condition_by_reactivity/de_full_pseudobulk.csv"))
+    clones_cl1 <- subset(clones_wo_5m, seurat_clusters == "1" & reactive == "TRUE")
     
-        
-    # Subset to cluster of interest, clones with at least min_cells ----
-    coi_cluster <- subset(clones_wo_5m,
-                          seurat_clusters == coi_cluster_id)
-    keep_clones <- clones_min_n(coi_cluster[[]], args$min_cells) ####
-    coi_cluster <- subset(coi_cluster,
-                          cells = rownames(keep_clones))
-    cl2_de <- run_de(coi_cluster, "condition", "Ri", "HD",
-                     sprintf("clones_cluster_%s_Ri_v_HD", coi_cluster_id))
+    markers <- fig_5f_all()
     
-    coi_cluster_pb <- make_pseudobulk(coi_cluster, "condition")
-    coi_cluster_de_pb <- FindAllMarkers(coi_cluster_pb, test.use = "DESeq2")
-    write_csv(coi_cluster_de_pb,
-              file.path(args$results,
-                        sprintf("tables/clones_cluster_%s_Ri_v_HD_pseudobulk",
-                                coi_cluster_id)))
+    rx_cl1_markers <- subset(clones_cl1, features = markers)
+    rx_cl1_markers <- ScaleData(rx_cl1_markers,
+                                features = Features(rx_cl1_markers))
     
-    # Clone of interest, disease versus remission ----
-    coi <- subset(seurat_obj, coi == "Ri01")
+    pdf("rx_cl1.pdf")
+    h <- DoHeatmap(rx_cl1_markers, features = Features(rx_cl1_markers))
+    print(h)
+    dev.off()
     
-    coi_de <- run_de(coi, "Sample",
-                    "Ri01_dis", "Ri01_5m", "Ri01_dis_v_5m")
     
-    # Disease versus remission with additional clones of interest ----
-    coi_set <- coi_for_de()
-    coi_set <- sapply(coi_set, function(x) gsub("TRBJ02", "TRBJ2", x))
-    seurat_obj[[]] <- seurat_obj[[]] %>%
-        dplyr::mutate(coi_temp = paste(trbv, cdr3_aa_beta, trbj, sep = "_"))
+    pdf("rx_cl1_by_donor.pdf", width = 12)
+    h <- heatmap_w_labs(rx_cl1_markers, col_group = "Sample")
+    print(h)
+    dev.off()
     
-    ri01 <- subset(seurat_obj, coi_temp %in% coi_set &
-                   Sample %in% c("Ri01_dis", "Ri01_5m"))
-    ri01_data <- as.matrix(LayerData(ri01, assay = "RNA", layer = "data"))
-    ri01_metadata <- ri01[[]] %>%
-        as_tibble(rownames = "Cell") %>%
-        dplyr::select(Cell, Sample, coi_temp) %>%
-        write_csv(file.path(dirname(args$seurat), "ri01_cois_metadata.csv"))
     
-    write_rds(ri01_data,
-              file.path(dirname(args$seurat), "ri01_cois_mat.rds"))
-    write_rds(ri01,
-              file.path(dirname(args$seurat), "ri01_cois.rds"))
+    source(file.path(args$workdir, "scripts/markers_sp1.R"))
+    fig5_markers <- fig_5_markers()
     
-    coi_de <- run_de(ri01, "Sample",
-                     "Ri01_dis", "Ri01_5m",
-                     "Ri01_dis_v_5m_clones_of_interest")
-    
-    # Write average expression of additional selected clones ----
-    Idents(ri01) <- "Sample"
-    AverageExpression(ri01, assays = "RNA")[["RNA"]] %>%
-        as_tibble(rownames = "gene") %>%
-        write_csv(file.path(args$results,
-                            "Ri01_dis_v_5m_clones_of_interest",
-                            "avg_expr_dis_5m.csv"))
-    
-    # Average expression each independently
-    ri01[[]] <- ri01[[]] %>%
-        dplyr::mutate(sample_clone = paste(Sample, coi_temp, sep = "_")) 
-    Idents(ri01) <- "sample_clone"
-    AverageExpression(ri01, assays = "RNA")[["RNA"]] %>%
-        as_tibble(rownames = "gene") %>%
-        write_csv(file.path(args$results,
-                            "Ri01_dis_v_5m_clones_of_interest",
-                            "avg_expr_dis_5m_by_clone.csv"))
+    x <- lapply(names(fig5_markers), function(nm) {
+        pdf(sprintf("%s_violin.pdf", gsub(" ", "_", nm)),
+            width = 12, height = 20)
+        h <- VlnPlot(rx_cl1_markers, features = fig5_markers[[nm]],
+                     group.by = "Sample", ncol = 2)
+        print(h)
+        dev.off() 
+    })
 
+    
+    x <- lapply(names(fig5_markers), function(nm) {
+        pdf(sprintf("%s_violin_counts.pdf", gsub(" ", "_", nm)),
+            width = 12, height = 20)
+        h <- VlnPlot(rx_cl1_markers, features = fig5_markers[[nm]],
+                     group.by = "Sample", ncol = 2, layer = "counts")
+        print(h)
+        dev.off() 
+    })
+    
+    #_______________________________________________________
+    
+    # Subset to just reactive clones, test HD v Ri ----
+    rx <- subset(clones_cl1, reactive == "TRUE")
+    cnd_de <- run_de(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD")
+    
+    # Pseudobulk at the sample level
+    cnd_de_pb_sample <- run_pseudo(rx, "condition", "Ri", "HD", 
+                                   group_by = "Sample",
+                                   name = "reactive_Ri_v_HD_pseudo_sample")
+    
+    # Pseudobulk by complementarity determining region CDR3
+    cnd_de_pb_cdr3 <- run_pseudo(rx, "condition", "Ri", "HD", 
+                                 group_by = c("Sample", "CTaa2"),
+                                 name = "reactive_Ri_v_HD_pseudo_cdr3")
+    
+    # Pseudobulk by CDR3 and beta chains
+    cnd_de_pb_beta_aa <- run_pseudo(rx, "condition", "Ri", "HD", 
+                                    group_by = c("Sample", "beta_aa"),
+                                    name = "reactive_Ri_v_HD_pseudo_clone")
+    
+    
+    # Pseudobulk by complementarity determining region CDR3 with Wilcoxon
+    cnd_de_pb_cdr3 <- run_pseudo(rx, "condition", "Ri", "HD", 
+                                 group_by = c("Sample", "CTaa2"),
+                                 test_use = "wilcox",
+                                 name = "reactive_Ri_v_HD_pseudo_cdr3_wilcox")
+    
+    # Pseudobulk by clone with Wilcoxon
+    cnd_de_pb_clone <- run_pseudo(rx, "condition", "Ri", "HD", 
+                                  group_by = c("Sample", "beta_aa"),
+                                  test_use = "wilcox",
+                                  name = "reactive_Ri_v_HD_pseudo_clone_wilcox")
+    
+    
+    # --------------------------
+    # Delme?
+    
+
+    # One v all pseudobulk - aggregate samples + beta_aa ---- 
+    
+    # This includes filtering
+    pb_beta_aa <- make_pseudobulk(clones_wo_5m, "rx_by_cnd")
+    
+    pb_beta_aa_de <- FindAllMarkers(pb_beta_aa,
+                                    test.use = "DESeq2") %>%
+        as_tibble(rownames = "gene")
+    
+    write_csv(pb_beta_aa_de,
+              file.path(args$results,
+                        "condition_by_reactivity/de_full_pseudobulk_beta_aa.csv"))
+    
+    
+    # Pseudobulk samples ----
+    pb_sample <- make_pseudobulk(clones_wo_5m, "rx_by_cnd", group_by = "Sample")
+    
+    pb_sample_de <- FindAllMarkers(pb_sample,
+                                   test.use = "DESeq2") %>%
+        as_tibble(rownames = "gene")
+    
+    write_csv(pb_sample_de,
+              file.path(args$results,
+                        "condition_by_reactivity/de_full_pseudobulk_sample.csv"))
+    
+    # Pseudobulk CDR3 ----
+    pb_cdr3 <- make_pseudobulk(clones_wo_5m, "rx_by_cnd",
+                               group_by = c("Sample", "CTaa2"))
+    
+    pb_cdr3_de <- FindAllMarkers(pb_cdr3,
+                                 test.use = "DESeq2") %>%
+        as_tibble(rownames = "gene")
+    
+    write_csv(pb_sample_de,
+              file.path(args$results,
+                        "condition_by_reactivity/de_full_pseudobulk_cdr3.csv"))
 }
 
 # ----------------------------------------------------------------------------
 main(args)
+
+# Add TCR annotation to heatmap  
+# 
+# so <- seurat_obj[[]] %>%
+#     dplyr::select(beta_aa, matches("trb"), cdr3_aa_beta) %>%
+#     unique() %>%
+#     dplyr::mutate(beta_aa = gsub("_", "-", beta_aa))
+# 
+# clone_pseudo[[]] <- clone_pseudo[[]] %>%
+#     dplyr::left_join(so) 
+# 
+# 
+# column_ha = HeatmapAnnotation(TRBV = clone_pseudo$trbv,
+#                               TRBJ = clone_pseudo$trbj)
+# 
+# h <- heatmap_w_labs(clone_pseudo,
+#                     col_labs = structure(levels(Idents(clone_pseudo)),
+#                                          names = levels(Idents(clone_pseudo))),
+#                     col_group = idents,
+#                     row_group = FALSE, show_column_names = TRUE)
+# 
+# 
+# column_ha = HeatmapAnnotation(CDR3 = anno_text(clone_pseudo$cdr3_aa_beta,
+#                                                rot = 90,
+#                                                location = 0,
+#                                                just = "left",
+#                                                gp = gpar(fontsize = 8))

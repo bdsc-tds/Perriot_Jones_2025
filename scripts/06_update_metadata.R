@@ -12,6 +12,33 @@ parser$add_argument('--clones', help = 'csv of tested clones')
 
 args <- parser$parse_args()
 
+source(file.path(args$workdir, "scripts/clones_of_interest.R"))
+
+# ----------------------------------------------------------------------------
+
+
+# Get the cluster with the most clones of interest ----
+get_cluster_coi <- function(md){
+    md %>%
+        dplyr::filter(is_coi == "coi") %>%
+        dplyr::group_by(seurat_clusters) %>%
+        dplyr::summarise(n = n()) %>%
+        dplyr::arrange(desc(n)) %>%
+        dplyr::slice_head(n = 1) %>%
+        dplyr::pull(seurat_clusters)
+}
+
+# Subset to reactive clones from the cluster of interest ----
+subset_rx_coi_dis <- function(obj){
+    
+    
+}
+
+# Subset to the cluster of interest ----
+subset_coi_dis <- function(obj){
+    
+    
+}
 
 # main ----
 main <- function(args){
@@ -31,8 +58,8 @@ main <- function(args){
                          by = c("Sample","cdr3_aa_beta", "trbv", "trbj"),
                          relationship = "many-to-one")
     
-    # Add reactivity x condition
-    # TO DO - check if Ri01_5m is a problem here
+    
+    # Add reactivity x condition ----
     seurat_obj[[]] <- seurat_obj[[]] %>%
         dplyr::mutate(condition = case_when(condition == "Ri01_dis" ~ "Ri",
                                             TRUE ~ condition),
@@ -49,6 +76,27 @@ main <- function(args){
                                                    "TRUE" ~ "Reactive",
                                                reactive ==
                                                    "FALSE" ~ "Non-reactive"))
+    
+    
+    coi_cluster_id <- get_cluster_coi(seurat_obj[[]])
+    
+    # TO DO - THIS IS ALREADY CLONES
+    # Subset to clones where reactivity information is known ----
+    clones <- subset(seurat_obj, reactive %in% c(TRUE, FALSE))
+    write_rds(clones, file.path(dirname(args$seurat), "reactive_clones.rds"))
+    
+    
+    # Remove followup sample, adjust condition ---- 
+    clones_wo_5m <- subset(clones, Sample != "Ri01_5m")
+    
+    clones_wo_5m[[]] <- clones_wo_5m[[]] %>%
+        dplyr::mutate(condition = case_when(condition == "Ri01_dis" ~ "Ri",
+                                            TRUE ~ condition)) %>%
+        dplyr::mutate(rx_by_cnd = paste(condition, reactive, sep = "_"))
+    Idents(clones_wo_5m) <- "rx_by_cnd"
+    
+    # Subset to just reactive clones, test HD v Ri ----
+    rx <- subset(clones_wo_5m, reactive == "TRUE")
     
     # Re-save seurat object and metadata
     write_rds(seurat_obj, args$seurat)

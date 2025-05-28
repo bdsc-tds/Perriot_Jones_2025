@@ -41,6 +41,29 @@ palettes <- function(results){
     return(palettes)
 }
 
+
+# make volcano ----
+make_volcano <- function(de, res_dir){
+    pdf(file.path(res_dir, "volcano.pdf"))
+    p <- volc_mod(de,
+                  xlab = expression("Average " * log[2] * "FC"),
+                  ylab = expression(-log[10]*"(adjusted p-value)"),
+                  x = "avg_log2FC",
+                  y = "p_val_adj")
+    print(p)
+    dev.off()
+}
+
+
+de_reactive_Ri_v_HD <- function(seurat_obj){
+    # Subset to just reactive clones, test HD v Ri ----
+    rx <- subset(clones_wo_5m, reactive == "TRUE")
+    cnd_de <- run_de(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD")
+    cnd_de_pb <- run_pseudo(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD_pseudo")
+    
+}
+
+
 # main ----
 main <- function(args){
     
@@ -94,6 +117,12 @@ main <- function(args){
                          name = sprintf("%s_average.pdf", print_nm),
                          agg_method = "average")
     })   
+    
+    # ____________
+    # TO DO -----
+    # Make pseudobulk by clone, average across
+    
+    # ___________
 }
 
 # ----------------------------------------------------------------------------
