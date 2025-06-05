@@ -94,9 +94,12 @@ main <- function(args){
                                                     "Ri non-reactive",
                                                     "HD non-reactive")))
     
+    # Subset to cluster 1 ----
+    clones <- subset(clones, seurat_clusters == 1)
+    
     # Heatmaps for curated marker sets ----
     markers <- fig_5_markers()
-    rx_partial_small <- purrr::partial(rx_marker_set,
+    rx_partial_small <- purrr::partial(pb_marker_set, #rx_marker_set,
                                        all_clones = clones,
                                        palettes = palettes,
                                        width = 7, height = 7,
@@ -109,6 +112,18 @@ main <- function(args){
                                               cat_label = name),
                          name = sprintf("%s.pdf", print_nm))
     })
+    
+    
+    # Pseudobulk, DESeq FPM
+    dummy <- lapply(names(markers), function(name){
+        print_nm <- gsub("[[:punct:][:space:]]", "_", name)
+        rx_partial_small(markers = data.frame(gene = markers[[name]],
+                                              cat_label = name),
+                         name = sprintf("%s_deseq_fpm.pdf", print_nm),
+                         method = "DESeq2")
+    })
+    
+    
     
     dummy <- lapply(names(markers), function(name){
         print_nm <- gsub("[[:punct:][:space:]]", "_", name)

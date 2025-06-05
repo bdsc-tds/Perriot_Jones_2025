@@ -3,6 +3,7 @@
 
 library("argparse")
 library("ComplexHeatmap")
+library("DESeq2")
 library("ggplot2")
 library("tidyverse")
 library("Seurat")
@@ -199,6 +200,12 @@ run_diff_expr_pb <- function(obj, results_dir, idents, ident_1, ident_2,
         as_tibble(rownames = "gene")
     write_csv(pseudo_counts, file.path(res_dir, "summed_counts.csv"))
 
+    # Write DESeq2 equivalent of cpm ----
+    
+    
+    
+    
+    
     av_expr <- as.matrix(AverageExpression(obj,
                                group.by = unique(c(idents, group_by)),
                                layer = "counts")$RNA) %>%
@@ -261,6 +268,38 @@ fig_5f_all <- function(){
                  "IRF8", "PLCG2", "ABCB9", "PRKCE", "DAPK2", "ID2", "ADAM9", "EPAS1"
     )
     return(markers)
+}
+
+
+make_violins <- function(seurat_obj, args, out_dir = ".", markers = NULL){
+    if (is.null(markers)) {
+        source(file.path(args$workdir, "scripts/markers_sp1.R"))
+        markers <- fig_5_markers()
+        
+    }
+    
+    # Violin plots using log counts
+    x <- lapply(names(markers), function(nm) {
+        pdf(file.path(out_dir, sprintf("%s_violin.pdf", gsub(" ", "_", nm))),
+            width = 12, height = 20)
+        h <- VlnPlot(seurat_obj, features = markers[[nm]],
+                     group.by = "Sample", ncol = 2)
+        print(h)
+        dev.off() 
+    })
+    
+    
+    # Violin plots using raw counts
+    x <- lapply(names(markers), function(nm) {
+        pdf(file.path(out_dir,
+                      sprintf("%s_violin_counts.pdf", gsub(" ", "_", nm))),
+            width = 12, height = 20)
+        h <- VlnPlot(seurat_obj, features = markers[[nm]],
+                     group.by = "Sample", ncol = 2, layer = "counts")
+        print(h)
+        dev.off() 
+    })
+    
 }
 
 # main ----
@@ -356,28 +395,74 @@ main <- function(args, min_cells = 5, ...){
     print(h)
     dev.off()
     
+    # Make violins ----
     
+    # For just cluster 1
     source(file.path(args$workdir, "scripts/markers_sp1.R"))
     fig5_markers <- fig_5_markers()
     
-    x <- lapply(names(fig5_markers), function(nm) {
-        pdf(sprintf("%s_violin.pdf", gsub(" ", "_", nm)),
-            width = 12, height = 20)
-        h <- VlnPlot(rx_cl1_markers, features = fig5_markers[[nm]],
-                     group.by = "Sample", ncol = 2)
-        print(h)
-        dev.off() 
-    })
-
+    make_violins(rx_cl1_markers, args, outdir = ".", markers = fig5_markers)
     
-    x <- lapply(names(fig5_markers), function(nm) {
-        pdf(sprintf("%s_violin_counts.pdf", gsub(" ", "_", nm)),
-            width = 12, height = 20)
-        h <- VlnPlot(rx_cl1_markers, features = fig5_markers[[nm]],
-                     group.by = "Sample", ncol = 2, layer = "counts")
-        print(h)
-        dev.off() 
-    })
+    # For all reactive 
+    all_rx <- subset(clones_wo_5m,
+                     reactive == "TRUE",
+                     features = unlist(markers))
+    all_rx <- ScaleData(all_rx,
+                        features = Features(all_rx))
+    
+    make_violins(all_rx, args,
+                 out_dir = "results/violins/all_reactive/",
+                 markers = fig5_markers)
+    #_______________________________________________________
+    # Compare cluster 1 versus others 
+    all_rx[[]] <- all_rx[[]] %>%
+        dplyr::mutate(is_coi = ifelse(seurat_clusters == 1, TRUE, FALSE))
+    Idents(all_rx) <- all_rx$is_coi
+    cell_de <- FindAllMarkers(all_rx) %>%
+        as_tibble() %>%
+        dplyr::rename(cluster_1 = cluster)
+    write_csv(cell_de,
+              file.path("results/reactive_cl1_v_others/cell_level_diff_expr.csv"))
+    
+    all_rx_pb <- AggregateExpression(all_rx,
+                                     group.by = c("Sample", "is_coi"),
+                                     return.seurat = TRUE)
+    Idents(all_rx_pb) <- all_rx_pb$is_coi
+    sample_pb <-  FindAllMarkers(all_rx_pb, test.use = "DESeq2") # No DE genes
+    write_csv(sample_pb,
+              file.path("results/reactive_cl1_v_others/sample_pseudobulk_diff_expr.csv"))
+    
+    
+    all_rx_cdr3_pb <- AggregateExpression(all_rx,
+                                          group.by = c("TCR2", "is_coi"),
+                                          return.seurat = TRUE)
+    
+    Idents(all_rx_cdr3_pb) <- all_rx_cdr3_pb$is_coi
+    cdr3_pb <-  FindAllMarkers(all_rx_pb, test.use = "DESeq2") # No DE genes
+    write_csv(cdr3_pb,
+              file.path("results/reactive_cl1_v_others/cdr3_pseudobulk_diff_expr.csv"))
+    
+    # Barplot reactive all clusters
+    pdf("results/reactive_cl1_v_others/barplot_all_clusters.pdf")
+    all_rx[[]] %>%
+        ggplot(aes(x = seurat_clusters, fill = Sample)) +
+        geom_bar(position = position_fill()) + theme_bw()
+    dev.off()
+    
+    # Barplot reactive cl1 v others
+    pdf("results/reactive_cl1_v_others/barplot_cl1_v_others.pdf")
+    all_rx[[]] %>%
+        ggplot(aes(x = is_coi, fill = Sample)) +
+        geom_bar(position = position_fill()) + theme_bw()
+    dev.off()
+    
+    pdf("results/reactive_cl1_v_others/barplot_cl1_v_others_by_condition.pdf")
+    all_rx[[]] %>%
+        mutate(cl_cond = paste(condition, is_coi, sep = "_")) %>%
+        ggplot(aes(x = cl_cond, fill = Sample)) +
+        geom_bar(position = position_fill()) + theme_bw() +
+        labs(x = "Cluster 1 versus other clusters") 
+    dev.off()
     
     #_______________________________________________________
     

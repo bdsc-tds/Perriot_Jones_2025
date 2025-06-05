@@ -77,14 +77,14 @@ main <- function(args){
                                                reactive ==
                                                    "FALSE" ~ "Non-reactive"))
     
-    
+    # Subset to cluster of interest, save
     coi_cluster_id <- get_cluster_coi(seurat_obj[[]])
+    coi <- subset(seurat_obj, seurat_clusters == coi_cluster_id)
+    write_rds(coi, file.path(dirname(args$seurat), "cluster_of_interest.rds"))
     
-    # TO DO - THIS IS ALREADY CLONES
     # Subset to clones where reactivity information is known ----
     clones <- subset(seurat_obj, reactive %in% c(TRUE, FALSE))
-    write_rds(clones, file.path(dirname(args$seurat), "reactive_clones.rds"))
-    
+    write_rds(clones, file.path(dirname(args$seurat), "reactivity_tested.rds"))
     
     # Remove followup sample, adjust condition ---- 
     clones_wo_5m <- subset(clones, Sample != "Ri01_5m")
@@ -95,8 +95,16 @@ main <- function(args){
         dplyr::mutate(rx_by_cnd = paste(condition, reactive, sep = "_"))
     Idents(clones_wo_5m) <- "rx_by_cnd"
     
-    # Subset to just reactive clones, test HD v Ri ----
+    # Subset to just reactive clones ----
     rx <- subset(clones_wo_5m, reactive == "TRUE")
+    write_rds(clones, file.path(dirname(args$seurat), "reactive_clones.rds"))
+    
+    # Subset to just reactive clones from cluster of interest ----
+    rx <- subset(clones_wo_5m,
+                 reactive == "TRUE",
+                 seurat_clusters == coi_cluster_id)
+    write_rds(clones, file.path(dirname(args$seurat),
+                                "reactive_cluster_of_interest.rds"))
     
     # Re-save seurat object and metadata
     write_rds(seurat_obj, args$seurat)

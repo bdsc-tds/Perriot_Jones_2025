@@ -1,17 +1,30 @@
 library("ComplexHeatmap")
 
 # pseudobulk heatmap (for figure 4f and 5c-h) ----
-pb_heatmap <- function(pseudo, markers, palette, ...) {
-    anno <- markers$cat_label[match(Features(pseudo), markers$gene)]
+
+deseq2_fpm <- function(pseudo, cats, group_by, offset = 1){
+    dds1 <- DESeq2::DESeqDataSetFromMatrix(countData = pseudo, 
+                                           colData = cats,
+                                           design = reformulate(c(0, group_by)))
+    
+    #dds1 <- DESeq2::estimateSizeFactors(object = dds1)
+    #dds1 <- DESeq2::estimateDispersions(object = dds1, fitType = "local")
+    
+    fpms <- DESeq2::fpm(dds1)
+    
+    return(log2(fpms + offset))
+}
+
+pb_heatmap <- function(pseudo, markers, palette,  ...) {
+    anno <- markers$cat_label[match(rownames(pseudo), markers$gene)]
     cats <- unique(anno) 
-    dat <- LayerData(pseudo, "scale.data")
     
     if (length(cats) == 1){
         cluster_rows <- TRUE
         row_split <- NULL
         row_ha <- NULL
     } else {
-        cluster_rows <- cluster_within_group(t(dat), anno)
+        cluster_rows <- cluster_within_group(t(pseudo), anno)
         row_split <- length(cats)
         row_ha <- rowAnnotation(Category = anno,
                                 col = list(Category = 
@@ -21,7 +34,7 @@ pb_heatmap <- function(pseudo, markers, palette, ...) {
                                 show_annotation_name = FALSE)
     }
     
-    heatmap_args <- list(matrix = dat,
+    heatmap_args <- list(matrix = pseudo,
                          col = palette,
                          cluster_columns = TRUE,
                          show_column_dend = FALSE,
@@ -31,7 +44,11 @@ pb_heatmap <- function(pseudo, markers, palette, ...) {
                          column_names_gp = gpar(fontsize = 7),
                          row_split = row_split,
                          row_title_gp = gpar(fontsize = 7.4),
-                         column_labels = unique(pseudo$orig.ident),
+                         
+                         
+                         #column_labels = unique(pseudo$orig.ident),
+                         
+                         
                          heatmap_legend_param = list(title = "Scaled \nexpression"),
                          left_annotation = row_ha,
                          cluster_rows = cluster_rows,
@@ -49,6 +66,7 @@ pb_marker_set <- function(all_clones,
                           palettes,
                           group_by = "rx_by_cnd",
                           name = "category_by_reactivity.pdf",
+                          method = "scale_data",
                           width = 3,
                           height = 8,
                           agg_method = "pseudobulk",
@@ -56,8 +74,7 @@ pb_marker_set <- function(all_clones,
     
     # Subset to genes of interest, aggregate expression
     clones <- subset(all_clones,
-                     Sample != "Ri01_5m",
-                     features = markers$gene)
+                     Sample != "Ri01_5m")
     
     if (agg_method == "pseudobulk"){
         pseudo_cat <- AggregateExpression(clones,
@@ -67,18 +84,31 @@ pb_marker_set <- function(all_clones,
         pseudo_cat <- AverageExpression(clones,
                                         group.by = group_by,
                                         return.seurat = TRUE)
-    }
-    
+    } 
     
     if (group_by == "seurat_clusters"){
         pseudo_cat$orig.ident <- gsub("g", "", pseudo_cat$orig.ident)
     }
     
+    if (method == "scale_data"){
+        pseudo_cat <- LayerData(pseudo_cat, "scale.data")
+    } else {
+        pseudo_cat <- deseq2_fpm(GetAssayData(pseudo_cat, layer = "counts"), 
+                                 pseudo_cat[[]],
+                                 group_by = group_by,
+                                 offset = 1)
+    }
+    
+    pseudo_cat <- pseudo_cat[intersect(markers$gene, rownames(pseudo_cat)), ]
+    
     # For each palette, make a heatmap of aggregated values
     dummy <- lapply(names(palettes), function(pal_dir){
         print(file.path(pal_dir, name))
         pdf(file.path(pal_dir, name), width = width, height = height)
-        h <- pb_heatmap(pseudo_cat, markers, palette = palettes[[pal_dir]], ...)
+        h <- pb_heatmap(pseudo_cat,
+                        markers,
+                        palette = palettes[[pal_dir]],
+                        method = method, ...)
         print(h)
         dev.off()
     })
@@ -116,7 +146,10 @@ heatmap_w_labs <- function(obj,
         palette <- viridis::viridis(100)
     }
     
+    # -------------
     dat <- LayerData(obj, "scale.data")
+    # --------------
+    
     
     if (is.null(col_labs)) {
         temp <- unique(as.character(obj[[col_group]][,1]))
