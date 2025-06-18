@@ -3,6 +3,7 @@
 
 library("argparse")
 library("Seurat")
+library("tidyverse")
 
 # Command line arguments ----
 parser <- ArgumentParser(description = "Differential expression analyses")

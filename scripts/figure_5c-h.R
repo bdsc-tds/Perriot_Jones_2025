@@ -120,11 +120,12 @@ main <- function(args){
         rx_partial_small(markers = data.frame(gene = markers[[name]],
                                               cat_label = name),
                          name = sprintf("%s_deseq_fpm.pdf", print_nm),
-                         method = "DESeq2")
+                         method = "DESeq2",
+                         fpm_out = file.path(results, "deseq_fpm.csv"))
     })
     
     
-    
+    # Average expression
     dummy <- lapply(names(markers), function(name){
         print_nm <- gsub("[[:punct:][:space:]]", "_", name)
         rx_partial_small(markers = data.frame(gene = markers[[name]],
@@ -133,11 +134,6 @@ main <- function(args){
                          agg_method = "average")
     })   
     
-    # ____________
-    # TO DO -----
-    # Make pseudobulk by clone, average across
-    
-    # ___________
 }
 
 # ----------------------------------------------------------------------------

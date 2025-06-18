@@ -2,7 +2,8 @@ library("ComplexHeatmap")
 
 # pseudobulk heatmap (for figure 4f and 5c-h) ----
 
-deseq2_fpm <- function(pseudo, cats, group_by, offset = 1){
+# deseq2_fpm ----
+deseq2_fpm <- function(pseudo, cats, group_by, offset = 1, out_fname = NULL){
     dds1 <- DESeq2::DESeqDataSetFromMatrix(countData = pseudo, 
                                            colData = cats,
                                            design = reformulate(c(0, group_by)))
@@ -12,9 +13,14 @@ deseq2_fpm <- function(pseudo, cats, group_by, offset = 1){
     
     fpms <- DESeq2::fpm(dds1)
     
+    if (! is.null(out_fname)){ 
+        write_csv(as_tibble(fpms, rownames = "gene"), out_fname)
+    }
+    
     return(log2(fpms + offset))
 }
 
+# pb_heatmap ----
 pb_heatmap <- function(pseudo, markers, palette,  ...) {
     anno <- markers$cat_label[match(rownames(pseudo), markers$gene)]
     cats <- unique(anno) 
@@ -57,6 +63,8 @@ pb_heatmap <- function(pseudo, markers, palette,  ...) {
     
     heatmap_args <- modifyList(heatmap_args, list(...))
     
+    print(heatmap_args)
+    
     return(do.call(Heatmap, heatmap_args))
 }
 
@@ -67,6 +75,7 @@ pb_marker_set <- function(all_clones,
                           group_by = "rx_by_cnd",
                           name = "category_by_reactivity.pdf",
                           method = "scale_data",
+                          fpm_out = NULL,
                           width = 3,
                           height = 8,
                           agg_method = "pseudobulk",
@@ -93,10 +102,14 @@ pb_marker_set <- function(all_clones,
     if (method == "scale_data"){
         pseudo_cat <- LayerData(pseudo_cat, "scale.data")
     } else {
+        pseudo_cnts <- GetAssayData(pseudo_cat, layer = "counts")
+        # FILTER
+        
         pseudo_cat <- deseq2_fpm(GetAssayData(pseudo_cat, layer = "counts"), 
                                  pseudo_cat[[]],
                                  group_by = group_by,
-                                 offset = 1)
+                                 offset = 1,
+                                 out_fname = fpm_out)
     }
     
     pseudo_cat <- pseudo_cat[intersect(markers$gene, rownames(pseudo_cat)), ]

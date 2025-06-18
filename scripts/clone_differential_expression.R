@@ -25,6 +25,7 @@ args <- parser$parse_args()
 
 source(file.path(args$workdir, "scripts/funcs_EnhancedVolcano_mod.R"))
 source(file.path(args$workdir, "scripts/funcs_custom_heatmaps.R"))
+source(file.path(args$workdir, "scripts/funcs_differential_expression.R"))
 source(file.path(args$workdir, "scripts/clones_of_interest.R"))
 # ----------------------------------------------------------------------------
 
@@ -52,6 +53,8 @@ filter_tcr_genes <- function(markers){
 } 
 
 # write top genes ----
+# Write counts, log counts and pseudobulk (sample-level) counts for genes
+# passing a significance threshold
 write_top_genes <- function(de, obj, res_dir, pval_min, fc_cutoff = 0.25){
     de_genes <- de %>%
         dplyr::filter(p_val_adj <= pval_min, abs(avg_log2FC) >= fc_cutoff) %>%
@@ -201,10 +204,6 @@ run_diff_expr_pb <- function(obj, results_dir, idents, ident_1, ident_2,
     write_csv(pseudo_counts, file.path(res_dir, "summed_counts.csv"))
 
     # Write DESeq2 equivalent of cpm ----
-    
-    
-    
-    
     
     av_expr <- as.matrix(AverageExpression(obj,
                                group.by = unique(c(idents, group_by)),
@@ -470,103 +469,35 @@ main <- function(args, min_cells = 5, ...){
     rx <- subset(clones_cl1, reactive == "TRUE")
     cnd_de <- run_de(rx, "condition", "Ri", "HD", "reactive_Ri_v_HD")
     
-    # Pseudobulk at the sample level
+    # Pseudobulk at the sample level ----
     cnd_de_pb_sample <- run_pseudo(rx, "condition", "Ri", "HD", 
                                    group_by = "Sample",
                                    name = "reactive_Ri_v_HD_pseudo_sample")
     
-    # Pseudobulk by complementarity determining region CDR3
+    # Pseudobulk by complementarity determining region CDR3 ----
     cnd_de_pb_cdr3 <- run_pseudo(rx, "condition", "Ri", "HD", 
                                  group_by = c("Sample", "CTaa2"),
                                  name = "reactive_Ri_v_HD_pseudo_cdr3")
     
-    # Pseudobulk by CDR3 and beta chains
+    # Pseudobulk by CDR3 and beta chains ----
     cnd_de_pb_beta_aa <- run_pseudo(rx, "condition", "Ri", "HD", 
                                     group_by = c("Sample", "beta_aa"),
                                     name = "reactive_Ri_v_HD_pseudo_clone")
     
     
-    # Pseudobulk by complementarity determining region CDR3 with Wilcoxon
+    # Pseudobulk by complementarity determining region CDR3 with Wilcoxon ----
     cnd_de_pb_cdr3 <- run_pseudo(rx, "condition", "Ri", "HD", 
                                  group_by = c("Sample", "CTaa2"),
                                  test_use = "wilcox",
                                  name = "reactive_Ri_v_HD_pseudo_cdr3_wilcox")
     
-    # Pseudobulk by clone with Wilcoxon
+    # Pseudobulk by clone with Wilcoxon ----
     cnd_de_pb_clone <- run_pseudo(rx, "condition", "Ri", "HD", 
                                   group_by = c("Sample", "beta_aa"),
                                   test_use = "wilcox",
                                   name = "reactive_Ri_v_HD_pseudo_clone_wilcox")
     
-    
-    # --------------------------
-    # Delme?
-    
-
-    # One v all pseudobulk - aggregate samples + beta_aa ---- 
-    
-    # This includes filtering
-    pb_beta_aa <- make_pseudobulk(clones_wo_5m, "rx_by_cnd")
-    
-    pb_beta_aa_de <- FindAllMarkers(pb_beta_aa,
-                                    test.use = "DESeq2") %>%
-        as_tibble(rownames = "gene")
-    
-    write_csv(pb_beta_aa_de,
-              file.path(args$results,
-                        "condition_by_reactivity/de_full_pseudobulk_beta_aa.csv"))
-    
-    
-    # Pseudobulk samples ----
-    pb_sample <- make_pseudobulk(clones_wo_5m, "rx_by_cnd", group_by = "Sample")
-    
-    pb_sample_de <- FindAllMarkers(pb_sample,
-                                   test.use = "DESeq2") %>%
-        as_tibble(rownames = "gene")
-    
-    write_csv(pb_sample_de,
-              file.path(args$results,
-                        "condition_by_reactivity/de_full_pseudobulk_sample.csv"))
-    
-    # Pseudobulk CDR3 ----
-    pb_cdr3 <- make_pseudobulk(clones_wo_5m, "rx_by_cnd",
-                               group_by = c("Sample", "CTaa2"))
-    
-    pb_cdr3_de <- FindAllMarkers(pb_cdr3,
-                                 test.use = "DESeq2") %>%
-        as_tibble(rownames = "gene")
-    
-    write_csv(pb_sample_de,
-              file.path(args$results,
-                        "condition_by_reactivity/de_full_pseudobulk_cdr3.csv"))
-}
+ }
 
 # ----------------------------------------------------------------------------
 main(args)
-
-# Add TCR annotation to heatmap  
-# 
-# so <- seurat_obj[[]] %>%
-#     dplyr::select(beta_aa, matches("trb"), cdr3_aa_beta) %>%
-#     unique() %>%
-#     dplyr::mutate(beta_aa = gsub("_", "-", beta_aa))
-# 
-# clone_pseudo[[]] <- clone_pseudo[[]] %>%
-#     dplyr::left_join(so) 
-# 
-# 
-# column_ha = HeatmapAnnotation(TRBV = clone_pseudo$trbv,
-#                               TRBJ = clone_pseudo$trbj)
-# 
-# h <- heatmap_w_labs(clone_pseudo,
-#                     col_labs = structure(levels(Idents(clone_pseudo)),
-#                                          names = levels(Idents(clone_pseudo))),
-#                     col_group = idents,
-#                     row_group = FALSE, show_column_names = TRUE)
-# 
-# 
-# column_ha = HeatmapAnnotation(CDR3 = anno_text(clone_pseudo$cdr3_aa_beta,
-#                                                rot = 90,
-#                                                location = 0,
-#                                                just = "left",
-#                                                gp = gpar(fontsize = 8))
