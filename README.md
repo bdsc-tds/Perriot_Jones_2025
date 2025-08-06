@@ -1,11 +1,7 @@
 # Perriot and Jones, 2025
 ### Neuron-reactive KIR+ CD8+ T cells display an encephalitogenic transcriptional program in autoimmune encephalitis
 
-Code for R analyses for Perriot and Jones et al, 2025.  The TCR-seq data used in the study will be made available upon acceptance of the manuscript.  Running the analyses involving tested clones requires a list of the TCR sequences which we do not include in this github repository.  Please contact the corresponding authors for access to this table.  
-
-Currently, this repository includes exploratory code.  We are in the process of 
-tidying the repository to just include the analyses in the submitted manuscript,
-and renaming scripts to match the figures in the manuscript. 
+Code for R analyses for Perriot and Jones et al, 2025.  The TCR-seq data used in the study is available at NCBI GEO with accession [GSE263666](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE263666).  Running the analyses involving tested clones requires a list of the TCR sequences called "merged_clone_sets.csv" and a script containing a clone of interest "clones_of_interest.R" which we do not include in this github repository.  Please contact the corresponding authors for access to this table.  
 
 The pre-processing scripts prefixed with numbers must be run in order.  The 
 other scripts are stand-alone (assuming the pre-processing has been completed).
