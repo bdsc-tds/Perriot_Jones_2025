@@ -39,7 +39,6 @@ one_tcr_beta <- function(seurat_obj){
     return(seurat_obj)
 }
 
-
 cd8_or_tcr <- function(seurat_obj){
     return(.cd8_tcr(seurat_obj, "|"))
 }

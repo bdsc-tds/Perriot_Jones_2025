@@ -27,39 +27,6 @@ args <- parser$parse_args()
 # ----------------------------------------------------------------------------
 # Functions ----
 
-make_umap <- function(seurat_obj, fname, reduction, group_by, width, height, ...){
-    pdf(fname, width = width, height = height)
-    p <- DimPlot(seurat_obj,
-                 reduction = reduction,
-                 group.by = group_by,
-                 ...)
-    print(p)
-    dev.off()
-}
-
-make_umaps <- function(seurat_obj,
-                       fig_dir,
-                       reduction = "umap.full",
-                       group_by = c("Sample", "seurat_clusters"),
-                       width = 12,
-                       height = 12){
-    
-    template <- file.path(fig_dir, "%s%s.pdf")
-    run_umap <- purrr::partial(make_umap,
-                               seurat_ob = seurat_obj, 
-                               reduction = reduction,
-                               width = width,
-                               height = height)
-    
-    dummy <- lapply(group_by, function(gp) {
-        run_umap(fname = sprintf(template, gp, ""), gp)
-        run_umap(fname = sprintf(template, gp, "_split"), gp,
-                  split.by = gp, ncol = 4)
-    })
-    
-}
-
-    
 # run_sketch: Prep and sketch cells ----
 run_sketch <- function(obj, n_sketch = 5000){
     # Split and find variable features ----
@@ -178,8 +145,6 @@ run_integration <- function(args){
     md <- as_tibble(seurat_obj[[]], rownames = "Cell")
     write_csv(md,
               file.path(args$output, "integrated_seurat.csv.gz"))
-    
-    make_umaps(seurat_obj, fig_dir)
     
 }
 # ----------------------------------------------------------------------------

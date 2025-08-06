@@ -20,8 +20,6 @@ parser$add_argument('--samples', '-s',
 parser$add_argument('--output', '-o', help = 'name for seurat rds output')
 parser$add_argument('--cellbender', '-c',
                     help = 'Directory for cellbender input')
-parser$add_argument('--min-rna', '-r', dest = "min_rna", 
-                    help = 'Minimum total RNA count per cell', default = 200)
 parser$add_argument('--clones', dest = "coi", 
                     help = 'Sequence(s) for clones of interest')
 
@@ -85,9 +83,6 @@ add_tcr_metadata <- function(seurat_obj, combined_tcr){
 add_beta_aa <- function(seurat_obj){
     # Add beta chain cdr3
     seurat_obj[[]] <- beta_aa(seurat_obj[[]])
-    
-    # Add vj_aa
-    #seurat_obj[[]] <- vj_aa(seurat_obj[[]])
 }
 
 # h5_to_seurat ----
@@ -233,9 +228,6 @@ make_seurat <- function(args){
     
     # Classify cells by tcr presence
     seurat_obj[[]] <- tcr_presence(seurat_obj[[]])
-    
-    # Filter for minimum RNA expressed
-    #seurat_obj <- subset(seurat_obj, nCount_RNA >= args$min_rna)
     
      # Add clone of interest to metadata (must be after tcr metadata added)
     seurat_obj[[]] <- seurat_obj[[]] %>%
