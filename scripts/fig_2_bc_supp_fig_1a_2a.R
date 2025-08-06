@@ -55,7 +55,6 @@ main <- function(args){
     
     seurat_obj <- read_rds(args$seurat)
     
-    
     # Figure 4b - UMAP, colour by clusters ----
     Idents(seurat_obj) <- "seurat_clusters"
     pdf(file.path(results, "fig_4b.pdf"))
@@ -83,7 +82,7 @@ main <- function(args){
     
     Idents(seurat_obj) <- "cl_coi"
     
-    cols <- structure(c(gray, coi_cl_col, "#e60000"),
+    cols <- structure(c("#CCCCCC", coi_cl_col, "#e60000"),
                       names = c("Other", "cl", "coi"))
     
     pdf(file.path(results, "fig_4c.pdf"))
@@ -92,7 +91,7 @@ main <- function(args){
                  reduction = "umap.full",
                  order = c("coi", "cl"),
                  cols = cols,
-                 pt.size = pt.size,
+                 pt.size = 1.5,
                  alpha = 1) +
         labs(x = "UMAP 1", y = "UMAP 2") +
         guides(color = "none")
@@ -112,15 +111,15 @@ main <- function(args){
 
     # Supplementary figure 2A ----
     # UMAP, coloured and split by samples, without remission sample
-    seurat_obj <- subset(seurat_obj, Sample != "Ri05_5m")
-    seurat_obj[[]] <- seurat_obj[[]]  %>%
+    seurat_subs <- subset(seurat_obj, Sample != "Ri01_5m")
+    seurat_subs[[]] <- seurat_subs[[]]  %>%
         dplyr::mutate(Sample = ifelse(Sample == "Ri01_dis", "Ri01", Sample))
     
-    Idents(seurat_obj) <- "Sample"
-    pdf(file.path(results, sprintf("supp_fig_2a.pdf", condition)),
+    Idents(seurat_subs) <- "Sample"
+    pdf(file.path(results, "supp_fig_2a.pdf"),
         width = 12, height = 12)
     
-    p <- DimPlot(seurat_obj,
+    p <- DimPlot(seurat_subs,
                  reduction = "umap.full",
                  split.by = "Sample",
                  ncol = 4) +

@@ -62,14 +62,11 @@ make_barplot <- function(md, x, fill, out_fname,
 
 # make_barplots ----
 make_barplots <- function(md, res_dir){
-    out_dir <- file.path(res_dir, "barplots")
-    if (! file.exists(out_dir)) { dir.create(out_dir) }
-    
     # Clusters per sample
     make_barplot(md, x = seurat_clusters, fill = Sample,
-                 out_fname = file.path(out_dir, "clusters_per_sample.pdf"))
+                 out_fname = file.path(out_dir, "supp_fig_2b.pdf"))
     barplot_data(md, x = seurat_clusters, fill = Sample) %>%
-        write_csv(file.path(out_dir, "clusters_per_sample.csv"))
+        write_csv(file.path(res_dir, "supp_fig_2b_data.csv"))
 }
 
 
@@ -86,6 +83,11 @@ main <- function(args){
                                  levels = rev(sort(unique(seurat_clusters)))))
     
     make_barplots(md, args$results)
+    
+    barplot_data(md, x = Sample, fill = seurat_clusters) %>%
+        dplyr::mutate(condition = gsub("(HD|Ri).*", "\\1", Sample)) %>%
+        write_csv(file.path(args$results, "supp_fig_2c_data.csv"))
+    
 }
 
 # ----------------------------------------------------------------------------
