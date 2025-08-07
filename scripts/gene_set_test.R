@@ -1,7 +1,8 @@
+library("DESeq2")
 library("edgeR")
 library("limma")
 library("tidyverse")
-
+library("PCAtools")
 
 source(file.path(".", "scripts/markers_sp1.R"))
 source(file.path(".", "scripts/funcs_custom_heatmaps.R"))
@@ -44,6 +45,44 @@ make_heatmap <- function(dat,
     
 }
 
+
+make_deseq_heatmap <- function(pb, samples, all_markers = all_markers){
+    
+    dds1 <- DESeq2::DESeqDataSetFromMatrix(countData = pb[keep_genes, ], 
+                                           colData = samples,
+                                           design = ~condition)
+    
+    dds1 <- DESeq2::estimateSizeFactors(object = dds1)
+    dds1 <- DESeq2::estimateDispersions(object = dds1, fitType = "local")
+    
+    fpms <- fpm(dds1)
+    fpms <- fpms[intersect(rownames(fpms), all_markers), ]
+    cats <- marker_df[match(rownames(fpms), marker_df$gene), ]$category
+
+    
+    pdf(file.path(out_dir, "deseq2_log_fpm_plus_1.pdf"), height = 12)
+    h <- make_heatmap(log2(fpms + 1),
+                      col_group = samples$condition,
+                      row_names_gp = gpar(fontsize = 6),
+                      row_group = cats,
+                      row_split = length(unique(cats)),
+                      row_title_gp = gpar(fontsize = 7.4))
+    print(h)
+    dev.off()
+    
+    #dds1 <- DESeq2::nbinomWaldTest(object = dds1)
+    #res <- DESeq2::results(object = dds1,
+    #                       contrast = c("condition", "Ri", "HD"),
+    #                       alpha = 0.05)
+    
+    #to.return <- data.frame(p_val = res$pvalue,
+    #                        row.names = rownames(res))
+    #return(to.return)
+    
+    
+    
+}
+
 # run edgeR ----
 run_edger <- function(pb_fname, out_dir, min_total = 25,
                       min_reads = 2, min_samples = 3){
@@ -58,6 +97,20 @@ run_edger <- function(pb_fname, out_dir, min_total = 25,
     
     samples <- data.frame(sample=sample,
                          condition=cnd)
+    rownames(samples) <- colnames(pb)
+    
+    pdf(file.path(out_dir, "pca_genes_5f_reactive_cl1.pdf"))
+    p <- pca(pb[(intersect(rownames(pb), all_markers)), ],
+             metadata = samples)
+    biplot(p, showLoadings = TRUE, colby = "condition")
+    dev.off()
+    
+    pdf(file.path(out_dir, "pca_genes_5f_reactive_cl1_by_sample.pdf"))
+    p <- pca(pb[(intersect(rownames(pb), all_markers)), ],
+             metadata = samples)
+    biplot(p, showLoadings = TRUE, colby = "sample")
+    dev.off()
+
     design <- model.matrix(~0 + condition, data = samples)
     y <- DGEList(counts = pb, samples = samples)
  
@@ -118,8 +171,6 @@ run_edger <- function(pb_fname, out_dir, min_total = 25,
 }
 
 # Analysis ----
-
-
 
 base_dir <- "reactive_cl1/"
 cd3 <- file.path(base_dir, "reactive_Ri_v_HD_pseudo_cdr3")
