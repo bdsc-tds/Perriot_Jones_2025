@@ -84,6 +84,7 @@ main <- function(args){
     
     make_barplots(md, args$results)
     
+    # Note: supplementary figure 2c was generated using GraphPad with this datas
     barplot_data(md, x = Sample, fill = seurat_clusters) %>%
         dplyr::mutate(condition = gsub("(HD|Ri).*", "\\1", Sample)) %>%
         write_csv(file.path(args$results, "supp_fig_2c_data.csv"))

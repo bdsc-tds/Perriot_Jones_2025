@@ -8,7 +8,6 @@ library("scales")
 library("Seurat")
 library("ComplexHeatmap")
 library("khroma")
-library("viridis")
 library("RColorBrewer")
 
 # Command line arguments ----
@@ -28,29 +27,13 @@ source(file.path(args$workdir, "scripts/funcs_custom_heatmaps.R"))
 # ----------------------------------------------------------------------------
 # Functions ----
 
-
-# palettes ----
-palettes <- function(results){
-    palettes <- list("viridis" = viridis(100))
-    names(palettes) <- file.path(results, names(palettes))
-    
-    dummy <- lapply(names(palettes), function(nm){
-        if (! file.exists(nm)) { dir.create(nm) }
-    })
-
-    return(palettes)
-}
-
 # main ----
 main <- function(args){
     
     # Setup with all cells, genes of interest ----
     
-    results <- file.path(args$results, "heatmaps_fig_4_5")
-    if (! file.exists(results)) { dir.create(results, recursive = TRUE) }
+    if (! file.exists(args$results)) { dir.create(args$results, recursive=TRUE) }
 
-    palettes <- palettes(results) 
-    
     markers <- read_csv(file.path(args$workdir,
                                   "data/processed/gene_lists_4_5.csv")) %>%
         dplyr::mutate(cat_label = gsub(" ", "\n", category),
@@ -63,7 +46,7 @@ main <- function(args){
     } else { # Otherwise, generate it
         seurat_obj <- read_rds(args$seurat)
         
-        # Exclude Ri01_5m 
+        # Exclude Ri01_5m remission sample
         seurat_subs <- subset(seurat_obj, Sample != "Ri01_5m",
                               features = markers$gene)
         seurat_subs <- ScaleData(seurat_subs, features = markers$gene) 
@@ -76,7 +59,6 @@ main <- function(args){
     pb_marker_partial <- purrr::partial(pb_marker_set,
                                         all_clones = seurat_subs, 
                                         markers = markers,
-                                        palettes = palettes,
                                         group_by = "seurat_clusters",
                                         width = 5.3,
                                         height = 8,
@@ -86,8 +68,6 @@ main <- function(args){
                                         column_names_gp = gpar(fontsize = 10))
     
     pb_marker_partial(name = "category_by_cluster.pdf") # Sums
-    pb_marker_set(name = "category_by_cluster_average.pdf", # Averages
-                  agg_method = "average")
 }
 
 # ----------------------------------------------------------------------------
