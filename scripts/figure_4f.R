@@ -3,11 +3,10 @@
 
 library("argparse")
 library("ggplot2")
+library("khroma")
 library("tidyverse")
-library("scales")
 library("Seurat")
 library("ComplexHeatmap")
-library("khroma")
 library("RColorBrewer")
 
 # Command line arguments ----
@@ -18,19 +17,93 @@ parser$add_argument('--seurat', '-s',
 parser$add_argument('--results',  '-f', 
                     help = 'Directory for saving results')
 parser$add_argument('--workdir',  '-w', 
-                    help = 'working directory')
+                    help = 'Working directory')
 
 args <- parser$parse_args()
-
-source(file.path(args$workdir, "scripts/funcs_custom_heatmaps.R"))
 
 # ----------------------------------------------------------------------------
 # Functions ----
 
+# blue_yellow_red palette ----
+blue_yellow_red <- function(){
+    return(rev(brewer.pal(n = 7, name = "RdYlBu")))
+}
+
+pb_heatmap <- function(pseudo, markers, palette,  ...) {
+    anno <- markers$cat_label[match(rownames(pseudo), markers$gene)]
+    cats <- unique(anno) 
+    
+    if (length(cats) == 1){
+        cluster_rows <- TRUE
+        row_split <- NULL
+        row_ha <- NULL
+    } else {
+        cluster_rows <- cluster_within_group(t(pseudo), anno)
+        row_split <- length(cats)
+        row_ha <- rowAnnotation(Category = anno,
+                                col = list(Category = 
+                                               structure(color("light")(length(cats)),
+                                                         names = cats)),
+                                show_legend = c(FALSE),
+                                show_annotation_name = FALSE)
+    }
+    
+    heatmap_args <- list(matrix = pseudo,
+                         col = palette,
+                         cluster_columns = TRUE,
+                         show_column_dend = FALSE,
+                         show_row_dend = FALSE, 
+                         column_title_gp = gpar(fontsize = 10),
+                         row_names_gp = gpar(fontsize = 7),
+                         column_names_gp = gpar(fontsize = 7),
+                         row_split = row_split,
+                         row_title_gp = gpar(fontsize = 7.4),
+                         heatmap_legend_param = list(title = "Scaled \nexpression"),
+                         left_annotation = row_ha,
+                         cluster_rows = cluster_rows,
+                         column_names_rot = 45,
+                         row_gap = unit(2, "mm"))
+    
+    heatmap_args <- modifyList(heatmap_args, list(...))
+    
+    return(do.call(Heatmap, heatmap_args))
+}
+
+
+# reactivity analyses for single marker set ----
+pb_marker_set <- function(all_clones,
+                          markers,
+                          palette = blue_yellow_red(),
+                          group_by = "rx_by_cnd",
+                          agg_method = "pseudobulk",
+                          ...){
+    
+    # Subset to genes of interest, aggregate expression
+    clones <- subset(all_clones,
+                     Sample != "Ri01_5m")
+    
+    pseudo_cat <- AggregateExpression(clones,
+                                      group.by = group_by,
+                                      return.seurat = TRUE)
+    
+    pseudo_cat <- LayerData(pseudo_cat, "scale.data")
+    
+    if (group_by == "seurat_clusters"){
+        colnames(pseudo_cat) <- gsub("g", "", colnames(pseudo_cat))
+    }
+    
+    pseudo_cat <- pseudo_cat[intersect(markers$gene, rownames(pseudo_cat)), ]
+    
+    h <- pb_heatmap(pseudo_cat,
+                    markers,
+                    palette = palette,
+                    ...)
+    return(h)
+    
+}
+
 # main ----
 main <- function(args){
-    
-    # Setup with all cells, genes of interest ----
     
     if (! file.exists(args$results)) { dir.create(args$results, recursive=TRUE) }
 
@@ -56,18 +129,17 @@ main <- function(args){
     
            
     # Make heatmap of expression aggregated across clusters ----
-    pb_marker_partial <- purrr::partial(pb_marker_set,
-                                        all_clones = seurat_subs, 
-                                        markers = markers,
-                                        group_by = "seurat_clusters",
-                                        width = 5.3,
-                                        height = 8,
-                                        column_names_rot = 0,
-                                        row_title_gp = gpar(fontsize = 7.4),
-                                        column_title_gp = gpar(fontsize = 10),
-                                        column_names_gp = gpar(fontsize = 10))
+    h <- pb_marker_set(all_clones = seurat_subs, 
+                       markers = markers,
+                       group_by = "seurat_clusters",
+                       column_names_rot = 0,
+                       row_title_gp = gpar(fontsize = 7.4),
+                       column_title_gp = gpar(fontsize = 10),
+                       column_names_gp = gpar(fontsize = 10))
     
-    pb_marker_partial(name = "category_by_cluster.pdf") # Sums
+    pdf(file.path(args$results, "fig_4f.pdf"), width = 5.3, height = 8)
+    print(h)
+    dev.off()
 }
 
 # ----------------------------------------------------------------------------
