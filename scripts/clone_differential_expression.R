@@ -24,27 +24,9 @@ parser$add_argument('--min_cells',  '-m', default = 5,
 args <- parser$parse_args()
 
 source(file.path(args$workdir, "scripts/funcs_EnhancedVolcano_mod.R"))
-source(file.path(args$workdir, "scripts/funcs_custom_heatmaps.R"))
 source(file.path(args$workdir, "scripts/funcs_differential_expression.R"))
 source(file.path(args$workdir, "scripts/clones_of_interest.R"))
 # ----------------------------------------------------------------------------
-
-# make_pseudobulk - wrapper with corrections for when a category has no counts
-# for any gene ----
-make_pseudobulk <- function(obj, idents, group_by = c("Sample", "beta_aa")){
-    gp_by = unique(c(group_by, idents))
-    clone_pseudo <- AggregateExpression(obj,
-                                        group.by = gp_by,
-                                        return.seurat = TRUE)
-    
-    data_layer <- LayerData(clone_pseudo, "data")
-    na_col <- apply(data_layer, 2, function(x) all(is.na(x)))
-    data_layer[, names(na_col)[na_col]] <- 0
-    LayerData(clone_pseudo, "data") <- data_layer
-    clone_pseudo <- ScaleData(clone_pseudo, features = Features(clone_pseudo))
-    Idents(clone_pseudo) <- idents
-    return(clone_pseudo)
-}
 
 # filter_tcr_genes ----
 filter_tcr_genes <- function(markers){
@@ -52,102 +34,37 @@ filter_tcr_genes <- function(markers){
         dplyr::filter(! grepl("^TR[ABGD][VDJ]", gene))
 } 
 
-# write top genes ----
-# Write counts, log counts and pseudobulk (sample-level) counts for genes
-# passing a significance threshold
-write_top_genes <- function(de, obj, res_dir, pval_min, fc_cutoff = 0.25){
-    de_genes <- de %>%
-        dplyr::filter(p_val_adj <= pval_min, abs(avg_log2FC) >= fc_cutoff) %>%
-        dplyr::pull(gene)
-    
-    strs <- gsub("\\.", "_", as.character(c(pval_min, fc_cutoff)))
-    out_fname <- sprintf("de_genes_logcounts_pval_%s_fc_%s.csv",
-                         strs[1], strs[2])
-    
-    # Log counts
-    LayerData(obj,
-              assay = "RNA",
-              layer = "data",
-              features = de_genes) %>%
-        tibble::as_tibble(rownames = "gene") %>%
-        write_csv(file.path(res_dir, out_fname))
-    
-    # Counts 
-    LayerData(obj,
-              assay = "RNA",
-              layer = "counts",
-              features = de_genes) %>%
-        tibble::as_tibble(rownames = "gene") %>%
-        write_csv(file.path(res_dir, gsub("logcounts", "counts", out_fname)))
-    
-    # Pseudobulk, no FC cutoff.
-    de_pval <- de %>%
-        dplyr::filter(p_val_adj <= pval_min) %>%
-        dplyr::arrange(p_val_adj)
-    AggregateExpression(obj, group.by = "Sample",
-                        features = de_pval$gene,
-                        assays = "RNA")[[1]] %>%
-        tibble::as_tibble(rownames = "gene") %>%
-        write_csv(file.path(res_dir, 
-                            sprintf("pseudobulk_sample_pval_%s.csv", strs[1])))
+
+# markers ----
+markers <- function(){
+    return(c("IKZF2", "KLRC2", "KLRC3", "KLRK1", "KIR2DL1", "KIR2DL3", "IL7R",
+             "FOS", "JUN", "RELB", "EGR1", "EGR2", #"EGR3", "ZAP70", 
+             "JUND", "FOSB", "INPP5D", "CBLB",
+             "HLA-DQA1", "HLA-DQB1", "HLA-DRA", "HLA-DRB1", "HLA-DRB5",
+             "CD69", "CD74", "CD44", "VCAM1", "ICAM1",
+             "TNF", "IFNG", "GZMA", "GZMH", "CCL4", "CCL3", "CSF1",
+             "ZFP36L1", "NFKBIA",
+             "NKG7", "ID2"))
 }
 
-# make volcano ----
-make_volcano <- function(de, res_dir){
-    pdf(file.path(res_dir, "volcano.pdf"))
+# Volcano with markers labelled ----
+marker_volcano <- function(de, out_fname,
+                           labels = markers(),
+                           FCcutoff = 0.5, ...){
+    pdf(out_fname)
     p <- volc_mod(de,
-                  xlab = expression("Average " * log[2] * "FC"),
-                  ylab = expression(-log[10]*"(adjusted p-value)"),
-                  x = "avg_log2FC",
-                  y = "p_val_adj")
+                  labels = labels,
+                  labelsFrom = "gene",
+                  labSize = 2,
+                  force = 5,
+                  FCcutoff = FCcutoff,
+                  col = c("grey50", "darkorange", "royalblue")) +
+        theme(axis.title = element_text(size = 30),
+              axis.text = element_text(size = 24))
     print(p)
     dev.off()
 }
 
-# Make heatmaps ----
-make_heatmaps <- function(obj, de, idents, out_fname, max_n, remove_tcr = FALSE,
-                          pseudobulk = TRUE, pval_min = 0.05, wd = 7, ht = 7, ...){
-    if (isTRUE(remove_tcr)){ 
-        de <- filter_tcr_genes(de)
-        out_fname <- gsub("(\\.pdf|\\.png)$", "_no_tcr\\1", out_fname)    
-    }
-
-    de <- de %>% filter(! is.na(p_val_adj))
-    n_sig <- sum(de$p_val_adj <= pval_min)
-    
-    # If there aren't enough differentially expressed genes, ignore p_val cutoff
-    if (n_sig > max_n){
-        de <- de %>%
-            dplyr::filter(p_val_adj <= pval_min)
-    }
-    
-    if (nrow(de) >= max_n){
-         de <- de%>%
-            dplyr::mutate(pval_sig = p_val_adj <= pval_min,
-                          pval_sig = factor(pval_sig, levels = c("TRUE", "FALSE")) ) %>%
-            # Keep the significant genes if there are any
-            dplyr::arrange(pval_sig, desc(abs(avg_log2FC)))
-         print(head(de))
-         de <- de %>%
-            dplyr::slice_head(n = max_n)
-    }
-    
-    obj_subs <- subset(obj, features = de$gene)
-    obj_subs <- ScaleData(obj_subs, features = Features(obj_subs))
-     
-    # Pseudobulk heatmap ----
-    if (isTRUE(pseudobulk)) { obj_subs <- make_pseudobulk(obj_subs, idents) } 
-    
-    pdf(gsub(".pdf", "_pseudobulk_clustered.pdf", out_fname),
-        width = wd, height = ht)
-    h <- heatmap_w_labs(obj_subs,
-                        col_labs = structure(levels(Idents(obj_subs)),
-                                             names = levels(Idents(obj_subs))), 
-                        col_group = idents, 
-                        row_group = FALSE)
-    print(h)
-    dev.off()
-}
 
 # Run differential expression analyses ----
 run_diff_expr <- function(obj, results_dir, idents, ident_1, ident_2,
@@ -165,141 +82,16 @@ run_diff_expr <- function(obj, results_dir, idents, ident_1, ident_2,
         dplyr::mutate("comparison" = name) %>%
         relocate(gene, comparison)
     
-    # CSV of results
-    write_csv(de, file.path(res_dir, "diff_expr_full.csv"))
-
+    # CSV of results, tcr_genes removed
     de <- filter_tcr_genes(de)
-    write_csv(de, file.path(res_dir, "diff_expr_rm_tcr.csv"))
+    write_csv(de, file.path(res_dir, "supp_table_7_diff_expr_rm_tcr.csv"))
     
     # Volcano of results
-    make_volcano(de, res_dir)
-        
-    # CSV of gene expression
-    write_top_genes(de, obj, res_dir, pval_min, fc_cutoff = 0.1)
+    make_volcano(de, file.path(res_dir, "fig_5a.pdf"))
 
-    tryCatch({dev.off()}, error = function(e){return()})
-    
-    # Heatmap
-    heatmap_out <- file.path(res_dir, "heatmap.pdf")
-
-    make_heatmaps(obj = obj, de = de, idents = idents, out_fname = heatmap_out,
-                  max_n = max_n, pval_min = pval_min, wd = wd, ht = ht,
-                  group.by = idents)
-    
     return(de)
 }
 
-# run_diff_expr_pb ----
-run_diff_expr_pb <- function(obj, results_dir, idents, ident_1, ident_2,
-                             group_by, name, max_n = 100, test_use = "DESeq2",
-                             pval_min = 0.05, wd = 7, ht = 7, ...){
-    res_dir <- file.path(results_dir, name)
-    if (! file.exists(res_dir)) { dir.create(res_dir, recursive = TRUE) }
-    
-    pseudo <- make_pseudobulk(obj, idents, group_by)
-    
-    # Write summed and average counts ----
-    pseudo_counts <- as.matrix(LayerData(pseudo, "counts")) %>%
-        as_tibble(rownames = "gene")
-    write_csv(pseudo_counts, file.path(res_dir, "summed_counts.csv"))
-
-    # Write DESeq2 equivalent of cpm ----
-    
-    av_expr <- as.matrix(AverageExpression(obj,
-                               group.by = unique(c(idents, group_by)),
-                               layer = "counts")$RNA) %>%
-        as_tibble(rownames = "gene")
-    write_csv(av_expr, file.path(res_dir, "average_counts.csv"))
-    
-    # Run diff expr ----
-    Idents(pseudo) <- pseudo[[idents]][, 1]
-    de <- FindMarkers(pseudo, ident.1 = ident_1, ident.2 = ident_2, 
-                      test.use = test_use, ...) %>%
-        dplyr::as_tibble(rownames = "gene") %>%
-        dplyr::mutate("comparison" = name) %>%
-        relocate(gene, comparison)
-    
-    # CSV of results
-    write_csv(de, file.path(res_dir, "diff_expr_pseudo_full.csv"))
-    
-    de <- filter_tcr_genes(de)
-    write_csv(de, file.path(res_dir, "diff_expr_pseudo_rm_tcr.csv"))
-    
-    make_heatmaps(pseudo, de, idents,
-                  out_fname = file.path(res_dir, "heatmap_pseudobulk_de.pdf"),
-                  max_n = max_n,
-                  pseudobulk = FALSE)
-    
-    return(de)
-}
-
-
-# Make counts table ----
-cluster_counts_table <- function(md, out_fname){
-    md %>%
-        dplyr::group_by(Sample, beta_aa, tcr_name) %>%
-        dplyr::summarise(n_clone = n()) %>%
-        dplyr::arrange(Sample, desc(n_clone)) %>%
-        write_csv(out_fname)
-}
-
-# clones counts table ----
-clones_counts_table <- function(md, out_fname){
-    md %>%
-        dplyr::group_by(Sample, beta_aa, tcr_name, seurat_clusters) %>%
-        dplyr::summarise(n_clone = n()) %>%
-        dplyr::arrange(Sample, tcr_name, desc(n_clone)) %>%
-        write_csv(out_fname)
-}
-
-fig_5f_all <- function(){
-    markers <- c("HLA-DQA1", "HLA-DQB1", "HLA-DRA", "HLA-DRB1", "HLA-DRB5", 
-                 "IL2RB", "CD69", "CD74", "TFRC", "CD44", "TNFRSF9", "VCAM1", 
-                 "ICAM1", "TNF", "IFNG", "PRF1", "GZMA", "GZMB", "GZMH", "GZMK", 
-                 "FASLG", "LAMP1", "NKG7", "CCL4", "CCL3", "CSF1", "IFIT1", "RSAD2", 
-                 "IFIT3", "MX1", "OAS3", "IFI6", "OAS1", "ISG15", "IFI44L", "IFIT2", 
-                 "IKZF2", "KLRC1", "KLRC2", "KLRC3", "KLRK1", "KIR2DL1", "KIR2DL2", 
-                 "KIR2DL3", "KIR2DL4", "KIR3DL1", "KIR3DL2", "KIR3DL3", "IL7R", 
-                 "ZAP70", "LCK", "NFATC1", "NFKB1", "NFKB2", "FOS", "JUN", "RELB", 
-                 "EGR1", "EGR2", "EGR3", "JUND", "FOSB", "PTPN6", "PTPN11", "INPP5D", 
-                 "CBL", "SHC1", "DOK2", "RASA1", "ITCH", "CBLB", "RC3H1", "RC3H2", 
-                 "DGKE", "DGKA", "ZFP36L1", "NFKBIA", "SH2B3", "EMPP1", "LRRK1", 
-                 "IRF8", "PLCG2", "ABCB9", "PRKCE", "DAPK2", "ID2", "ADAM9", "EPAS1"
-    )
-    return(markers)
-}
-
-
-make_violins <- function(seurat_obj, args, out_dir = ".", markers = NULL){
-    if (is.null(markers)) {
-        source(file.path(args$workdir, "scripts/markers_sp1.R"))
-        markers <- fig_5_markers()
-        
-    }
-    
-    # Violin plots using log counts
-    x <- lapply(names(markers), function(nm) {
-        pdf(file.path(out_dir, sprintf("%s_violin.pdf", gsub(" ", "_", nm))),
-            width = 12, height = 20)
-        h <- VlnPlot(seurat_obj, features = markers[[nm]],
-                     group.by = "Sample", ncol = 2)
-        print(h)
-        dev.off() 
-    })
-    
-    
-    # Violin plots using raw counts
-    x <- lapply(names(markers), function(nm) {
-        pdf(file.path(out_dir,
-                      sprintf("%s_violin_counts.pdf", gsub(" ", "_", nm))),
-            width = 12, height = 20)
-        h <- VlnPlot(seurat_obj, features = markers[[nm]],
-                     group.by = "Sample", ncol = 2, layer = "counts")
-        print(h)
-        dev.off() 
-    })
-    
-}
 
 # main ----
 main <- function(args, min_cells = 5, ...){
@@ -412,58 +204,7 @@ main <- function(args, min_cells = 5, ...){
     make_violins(all_rx, args,
                  out_dir = "results/violins/all_reactive/",
                  markers = fig5_markers)
-    #_______________________________________________________
-    # Compare cluster 1 versus others 
-    all_rx[[]] <- all_rx[[]] %>%
-        dplyr::mutate(is_coi = ifelse(seurat_clusters == 1, TRUE, FALSE))
-    Idents(all_rx) <- all_rx$is_coi
-    cell_de <- FindAllMarkers(all_rx) %>%
-        as_tibble() %>%
-        dplyr::rename(cluster_1 = cluster)
-    write_csv(cell_de,
-              file.path("results/reactive_cl1_v_others/cell_level_diff_expr.csv"))
-    
-    all_rx_pb <- AggregateExpression(all_rx,
-                                     group.by = c("Sample", "is_coi"),
-                                     return.seurat = TRUE)
-    Idents(all_rx_pb) <- all_rx_pb$is_coi
-    sample_pb <-  FindAllMarkers(all_rx_pb, test.use = "DESeq2") # No DE genes
-    write_csv(sample_pb,
-              file.path("results/reactive_cl1_v_others/sample_pseudobulk_diff_expr.csv"))
-    
-    
-    all_rx_cdr3_pb <- AggregateExpression(all_rx,
-                                          group.by = c("TCR2", "is_coi"),
-                                          return.seurat = TRUE)
-    
-    Idents(all_rx_cdr3_pb) <- all_rx_cdr3_pb$is_coi
-    cdr3_pb <-  FindAllMarkers(all_rx_pb, test.use = "DESeq2") # No DE genes
-    write_csv(cdr3_pb,
-              file.path("results/reactive_cl1_v_others/cdr3_pseudobulk_diff_expr.csv"))
-    
-    # Barplot reactive all clusters
-    pdf("results/reactive_cl1_v_others/barplot_all_clusters.pdf")
-    all_rx[[]] %>%
-        ggplot(aes(x = seurat_clusters, fill = Sample)) +
-        geom_bar(position = position_fill()) + theme_bw()
-    dev.off()
-    
-    # Barplot reactive cl1 v others
-    pdf("results/reactive_cl1_v_others/barplot_cl1_v_others.pdf")
-    all_rx[[]] %>%
-        ggplot(aes(x = is_coi, fill = Sample)) +
-        geom_bar(position = position_fill()) + theme_bw()
-    dev.off()
-    
-    pdf("results/reactive_cl1_v_others/barplot_cl1_v_others_by_condition.pdf")
-    all_rx[[]] %>%
-        mutate(cl_cond = paste(condition, is_coi, sep = "_")) %>%
-        ggplot(aes(x = cl_cond, fill = Sample)) +
-        geom_bar(position = position_fill()) + theme_bw() +
-        labs(x = "Cluster 1 versus other clusters") 
-    dev.off()
-    
-    #_______________________________________________________
+   
     
     # Subset to just reactive clones, test HD v Ri ----
     rx <- subset(clones_cl1, reactive == "TRUE")
@@ -473,30 +214,6 @@ main <- function(args, min_cells = 5, ...){
     cnd_de_pb_sample <- run_pseudo(rx, "condition", "Ri", "HD", 
                                    group_by = "Sample",
                                    name = "reactive_Ri_v_HD_pseudo_sample")
-    
-    # Pseudobulk by complementarity determining region CDR3 ----
-    cnd_de_pb_cdr3 <- run_pseudo(rx, "condition", "Ri", "HD", 
-                                 group_by = c("Sample", "CTaa2"),
-                                 name = "reactive_Ri_v_HD_pseudo_cdr3")
-    
-    # Pseudobulk by CDR3 and beta chains ----
-    cnd_de_pb_beta_aa <- run_pseudo(rx, "condition", "Ri", "HD", 
-                                    group_by = c("Sample", "beta_aa"),
-                                    name = "reactive_Ri_v_HD_pseudo_clone")
-    
-    
-    # Pseudobulk by complementarity determining region CDR3 with Wilcoxon ----
-    cnd_de_pb_cdr3 <- run_pseudo(rx, "condition", "Ri", "HD", 
-                                 group_by = c("Sample", "CTaa2"),
-                                 test_use = "wilcox",
-                                 name = "reactive_Ri_v_HD_pseudo_cdr3_wilcox")
-    
-    # Pseudobulk by clone with Wilcoxon ----
-    cnd_de_pb_clone <- run_pseudo(rx, "condition", "Ri", "HD", 
-                                  group_by = c("Sample", "beta_aa"),
-                                  test_use = "wilcox",
-                                  name = "reactive_Ri_v_HD_pseudo_clone_wilcox")
-    
  }
 
 # ----------------------------------------------------------------------------

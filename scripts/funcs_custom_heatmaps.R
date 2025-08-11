@@ -68,10 +68,16 @@ pb_heatmap <- function(pseudo, markers, palette,  ...) {
     return(do.call(Heatmap, heatmap_args))
 }
 
-# reactivity analyses for single marker set ----
+
+# blue_yellow_red palette ----
+blue_yellow_red <- function(){
+    return(rev(brewer.pal(n = 7, name = "RdYlBu")))
+}
+
+# pb_marker_set: reactivity analyses for single marker set ----
 pb_marker_set <- function(all_clones,
                           markers,
-                          palettes,
+                          palette = blue_yellow_red(),
                           group_by = "rx_by_cnd",
                           name = "category_by_reactivity.pdf",
                           method = "scale_data",
@@ -103,8 +109,7 @@ pb_marker_set <- function(all_clones,
         pseudo_cat <- LayerData(pseudo_cat, "scale.data")
     } else {
         pseudo_cnts <- GetAssayData(pseudo_cat, layer = "counts")
-        # FILTER
-        
+
         pseudo_cat <- deseq2_fpm(GetAssayData(pseudo_cat, layer = "counts"), 
                                  pseudo_cat[[]],
                                  group_by = group_by,
@@ -114,17 +119,13 @@ pb_marker_set <- function(all_clones,
     
     pseudo_cat <- pseudo_cat[intersect(markers$gene, rownames(pseudo_cat)), ]
     
-    # For each palette, make a heatmap of aggregated values
-    dummy <- lapply(names(palettes), function(pal_dir){
-        print(file.path(pal_dir, name))
-        pdf(file.path(pal_dir, name), width = width, height = height)
-        h <- pb_heatmap(pseudo_cat,
+    h <- pb_heatmap(pseudo_cat,
                         markers,
-                        palette = palettes[[pal_dir]],
-                        method = method, ...)
-        print(h)
-        dev.off()
-    })
+                        palette = palette,
+                        method = method,
+                    ...)
+    return(h)
+
 }
 
 
@@ -135,12 +136,6 @@ palette_steps <- function(disp.min, disp.max, n_steps = 49){
 }
 
 
-# purple_and_yellow ----
-pp_and_yl <- function(disp.min = -2.5, disp.max = 2.5){
-    steps <- palette_steps(disp.min = disp.min, disp.max = disp.min)
-    pp_yl_pal <- circlize::colorRamp2(steps, PurpleAndYellow())
-    return(pp_yl_pal)
-}
 
 # heatmap_w_labs ----
 heatmap_w_labs <- function(obj,

@@ -8,7 +8,6 @@ library("scales")
 library("Seurat")
 library("ComplexHeatmap")
 library("khroma")
-library("viridis")
 library("RColorBrewer")
 
 # Command line arguments ----
@@ -28,19 +27,6 @@ source(file.path(args$workdir, "scripts/markers_sp1.R"))
 
 # ----------------------------------------------------------------------------
 # Functions ----
-
-# palettes ----
-palettes <- function(results){
-    palettes <- list("viridis" = viridis(100))
-    names(palettes) <- file.path(results, names(palettes))
-    
-    dummy <- lapply(names(palettes), function(nm){
-        if (! file.exists(nm)) { dir.create(nm) }
-    })
-
-    return(palettes)
-}
-
 
 # make volcano ----
 make_volcano <- function(de, res_dir){
@@ -67,11 +53,9 @@ de_reactive_Ri_v_HD <- function(seurat_obj){
 # main ----
 main <- function(args){
     
-    results <- file.path(args$results, "heatmaps_fig_4_5")
-    if (! file.exists(results)) { dir.create(results, recursive = TRUE) }
+    if (! file.exists(args$results)) { dir.create(args$results,
+                                                  recursive = TRUE) }
 
-    palettes <- palettes(results) 
-    
     # Set up for cells with tested reactivity ----
     
     clones <- read_rds(args$clones)
@@ -94,12 +78,12 @@ main <- function(args){
                                                     "Ri non-reactive",
                                                     "HD non-reactive")))
     
-    # Subset to cluster 1 ----
+    # Subset to cluster 1 (the cluster containing the most reactive cells) ----
     clones <- subset(clones, seurat_clusters == 1)
     
     # Heatmaps for curated marker sets ----
     markers <- fig_5_markers()
-    rx_partial_small <- purrr::partial(pb_marker_set, #rx_marker_set,
+    rx_partial_small <- purrr::partial(pb_marker_set,
                                        all_clones = clones,
                                        palettes = palettes,
                                        width = 7, height = 7,
@@ -110,7 +94,7 @@ main <- function(args){
         print_nm <- gsub("[[:punct:][:space:]]", "_", name)
         rx_partial_small(markers = data.frame(gene = markers[[name]],
                                               cat_label = name),
-                         name = sprintf("%s.pdf", print_nm))
+                         name = sprintf("fig_5_%s.pdf", print_nm))
     })
     
     

@@ -29,17 +29,6 @@ get_cluster_coi <- function(md){
         dplyr::pull(seurat_clusters)
 }
 
-# Subset to reactive clones from the cluster of interest ----
-subset_rx_coi_dis <- function(obj){
-    
-    
-}
-
-# Subset to the cluster of interest ----
-subset_coi_dis <- function(obj){
-    
-    
-}
 
 # main ----
 main <- function(args){
@@ -113,4 +102,4 @@ main <- function(args){
 
 }
 
-
+main(args)

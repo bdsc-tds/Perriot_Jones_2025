@@ -23,8 +23,10 @@ source(file.path(args$workdir, "scripts/funcs_custom_heatmaps.R"))
 
 # ----------------------------------------------------------------------------
 # Make pseudobulk ----
-make_pseudobulk <- function(obj, idents){
-    gp_by = unique(c("Sample", "beta_aa", idents))
+# Wrapper to Seurat with corrections for when a category has no counts
+# for any gene ----
+make_pseudobulk <- function(obj, idents, group_by = c("Sample", "beta_aa")){
+    gp_by = unique(c(group_by, idents))
     clone_pseudo <- AggregateExpression(obj,
                                         group.by = gp_by,
                                         return.seurat = TRUE)
@@ -217,4 +219,4 @@ main <- function(args){
     dev.off()
 }
 
-
+main(args)
