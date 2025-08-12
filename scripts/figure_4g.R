@@ -76,6 +76,7 @@ pb_marker_set <- function(all_clones,
                           palette = blue_yellow_red(),
                           group_by = "rx_by_cnd",
                           agg_method = "pseudobulk",
+                          data_out = NULL,
                           ...){
     
     # Subset to genes of interest, aggregate expression
@@ -93,6 +94,10 @@ pb_marker_set <- function(all_clones,
     }
     
     pseudo_cat <- pseudo_cat[intersect(markers$gene, rownames(pseudo_cat)), ]
+    
+    if (! is.null(data_out)){
+        write_csv(as_tibble(pseudo_cat, rownames = "gene"), data_out)
+    }
     
     h <- pb_heatmap(pseudo_cat,
                     markers,
@@ -132,12 +137,13 @@ main <- function(args){
     h <- pb_marker_set(all_clones = seurat_subs, 
                        markers = markers,
                        group_by = "seurat_clusters",
+                       data_out = file.path(args$results, "fig_4g.csv"),
                        column_names_rot = 0,
                        row_title_gp = gpar(fontsize = 7.4),
                        column_title_gp = gpar(fontsize = 10),
                        column_names_gp = gpar(fontsize = 10))
     
-    pdf(file.path(args$results, "fig_4f.pdf"), width = 5.3, height = 8)
+    pdf(file.path(args$results, "fig_4g.pdf"), width = 5.3, height = 8)
     print(h)
     dev.off()
 }

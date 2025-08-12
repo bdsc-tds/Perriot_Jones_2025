@@ -126,10 +126,6 @@ main <- function(args, min_cells = 5, ...){
                                   "tables/reactive_clone_counts.csv"))
     
     # Write a table of cluster counts for clones from cluster of interest ----
-    cl_clones <- seurat_obj[[]] %>%
-        dplyr::filter(seurat_clusters == coi_cluster_id) %>%
-        dplyr::select(Sample, beta_aa) %>%
-        unique()
     cl_clusters <- seurat_obj[[]] %>%
         dplyr::inner_join(cl_clones, relationship = "many-to-one") %>%
         dplyr::group_by(Sample, beta_aa, tcr_name) %>%
@@ -167,7 +163,8 @@ main <- function(args, min_cells = 5, ...){
     #_______________________________________________________
     # Violin plots and heatmaps for cluster 1 reactive 
     
-    clones_cl1 <- subset(clones_wo_5m, seurat_clusters == "1" & reactive == "TRUE")
+    clones_cl1 <- subset(clones_wo_5m,
+                         seurat_clusters == "1" & reactive == "TRUE")
     
     markers <- fig_5f_all()
     

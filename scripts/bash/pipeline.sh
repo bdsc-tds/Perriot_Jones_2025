@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# These commands are specific to my working setup and would need to be changed
+# if rerunning on a different setup.
+
 module load singularityce
 
 # ENVIRONMENT VARIABLES
@@ -10,6 +13,7 @@ SCRATCH_DIR=${SCRATCH_DIR}
 export SINGULARITY_BINDPATH="/users,/scratch,/work,/data"
 
 singularity shell ${CONTAINER_DIR}tcr_seq.sif
+#--------------------------------------------------------------------------
 
 # Output directories
 FILTER_NM="one_tcr_beta"
@@ -64,8 +68,8 @@ Rscript ${SCRIPTS}supp_fig_2b_2c.R \
 --metadata ${FILTER_DATA}integrated_seurat.csv.gz \
 --results ${RESULTS}
 
-# figure_4f.R 
-Rscript ${SCRIPTS}figure_4f.R \
+# figure_4g.R 
+Rscript ${SCRIPTS}figure_4g.R \
 --seurat ${FILTER_DATA}integrated_seurat.rds \
 --results ${RESULTS} \
 --workdir ${WORKDIR}

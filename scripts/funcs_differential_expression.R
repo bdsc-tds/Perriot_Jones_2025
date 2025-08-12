@@ -5,69 +5,63 @@ filter_tcr_genes <- function(markers){
 } 
 
 
-# Pairwise differential expression ----
-pairwise_de <- function(seurat_obj,
-                        results,
-                        pairwise = de_expanded(),
-                        test_use = "DESeq2",
-                        p_cutoff = 0.05,
-                        n_top = 50,
-                        min_pct = 0.1, 
-                        remove_tcr = TRUE){
+# make_pseudobulk - wrapper with corrections for when a category has no counts
+# for any gene ----
+make_pseudobulk <- function(obj, idents){
+    gp_by = unique(c("Sample", "beta_aa", idents))
+    clone_pseudo <- AggregateExpression(obj,
+                                        group.by = gp_by,
+                                        return.seurat = TRUE)
     
-    # Create filenames using options ----
-    if (isTRUE(remove_tcr)){
-        filter_st <- "_no_tcrs_"
-    } else {
-        filter_st <- ""
-    }
-    heatmap_template <- file.path(results, "heatmap_pairwise_%stop_%s%s.pdf")
-     
-    if (test_use == "DESeq2"){ 
-        res_template <- file.path(results, "de_%s_pseudobulk.csv")
-        heatmap_fname <- sprintf(heatmap_template, "pseudobulk",
-                                 n_top, filter_st)
-    } else {
-        res_template <- file.path(results, "de_one_v_others_%s.csv")
-        heatmap_fname <- sprintf(heatmap_template, "one_v_others",
-                                 n_top, filter_st)
-    }
-    
-    # Run differential expression ----    
-    markers <- lapply(seq_len(nrow(pairwise)), function(i){
-        markers <- FindMarkers(seurat_obj,
-                               ident.1 = pairwise[[i, "ident_1"]],
-                               ident.2 = pairwise[[i, "ident_2"]], 
-                               test.use = test_use) %>%
-            tibble::as_tibble(rownames = "gene") %>%
-            dplyr::mutate(condition = pairwise[[i, "name"]]) %>%
-            dplyr::arrange(desc(abs(avg_log2FC))) %>%
-            dplyr::relocate(condition, gene)
-        
-        write_csv(markers, sprintf(res_template, pairwise[[i, "name"]]))
-        markers %>%
-            dplyr::filter(p_val_adj <= p_cutoff)
-    })
-    markers <- dplyr::bind_rows(markers)
-    
-    if (isTRUE(remove_tcr)){ markers <- filter_tcr_genes(markers) } 
-    
-    pairwise_de_heatmap(seurat_obj, markers, heatmap_fname, n_top)
-    invisible(markers)
+    data_layer <- LayerData(clone_pseudo, "data")
+    na_col <- apply(data_layer, 2, function(x) all(is.na(x)))
+    data_layer[, names(na_col)[na_col]] <- 0
+    LayerData(clone_pseudo, "data") <- data_layer
+    clone_pseudo <- ScaleData(clone_pseudo, features = Features(clone_pseudo))
+    Idents(clone_pseudo) <- idents
+    return(clone_pseudo)
 }
 
-# Heatmap of pairwise differential expression ----
-pairwise_de_heatmap <- function(seurat_obj, markers, outfname, n_top){
-    heatmap_markers <- markers %>%
-        dplyr::group_by(condition) %>%
-        dplyr::slice_head(n = n_top)
+
+# run_diff_expr_pb ----
+run_diff_expr_pb <- function(obj, results_dir, idents, ident_1, ident_2,
+                             name, markers = functional_markers(), max_n = 100,
+                             pval_min = 0.05, wd = 7, ht = 7, ...){
+    res_dir <- file.path(results_dir, name)
+    if (! file.exists(res_dir)) { dir.create(res_dir, recursive = TRUE) }
     
-    pdf(outfname)
-    p <- DoHeatmap(seurat_obj,
-                   size = 4,
-                   angle = 90,
-                   features = unique(heatmap_markers$gene)) +
-        theme(axis.text = element_text(size = 2))
+    pseudo <- make_pseudobulk(obj, idents)
+    
+    # Run diff expr
+    Idents(pseudo) <- pseudo[[idents]][, 1]
+    de <- FindMarkers(pseudo, ident.1 = ident_1, ident.2 = ident_2, 
+                      test.use = "DESeq2", ...) %>%
+        dplyr::as_tibble(rownames = "gene") %>%
+        dplyr::mutate("comparison" = name) %>%
+        relocate(gene, comparison)
+    
+    # CSV of results
+    write_csv(de, file.path(res_dir, "diff_expr_pseudo_full.csv"))
+    
+    de <- filter_tcr_genes(de)
+    write_csv(de, file.path(res_dir, "diff_expr_pseudo_rm_tcr.csv"))
+    
+    make_heatmaps(pseudo, de, idents,
+                  out_fname = file.path(res_dir("heatmap_pseudobulk_de.pdf")),
+                  max_n,
+                  pseudobulk = FALSE)
+    
+    return(de)
+}
+
+
+make_volcano <- function(de, res_dir){
+    pdf(file.path(res_dir, "volcano.pdf"))
+    p <- volc_mod(de,
+                  xlab = expression("Average " * log[2] * "FC"),
+                  ylab = expression(-log[10]*"(adjusted p-value)"),
+                  x = "avg_log2FC",
+                  y = "p_val_adj")
     print(p)
     dev.off()
 }
